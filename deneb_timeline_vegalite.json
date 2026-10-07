@@ -1,0 +1,98 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "description": "NAV timeline by fund (page 2). Deneb / Vega-Lite. Values well: Fact_Work[Fund_Label] + the 9 measures in folder 2 Fund Level\\Timeline.",
+  "data": {"name": "dataset"},
+  "width": "container",
+  "height": "container",
+  "config": {
+    "view": {"stroke": null},
+    "font": "Segoe UI",
+    "axis": {"labelColor": "#5B6573", "titleColor": "#5B6573", "domainColor": "#C9D1DB", "tickColor": "#C9D1DB", "gridColor": "#EEF1F4"},
+    "legend": {"labelColor": "#5B6573", "orient": "top", "title": null, "symbolType": "square"}
+  },
+  "transform": [
+    {"filter": "isValid(datum['Bar Offset'])"},
+    {"calculate": "datum['Bar Offset']", "as": "s0"},
+    {"calculate": "datum.s0 + (datum['Bar Waiting After Pricing'] || 0)", "as": "e1"},
+    {"calculate": "datum.e1 + (datum['Bar NAV To Controlled'] || 0)", "as": "e2"},
+    {"calculate": "datum.e2 + (datum['Bar Controlled To FA Signed Off'] || 0)", "as": "e3"},
+    {"calculate": "datum.e3 + (datum['Bar FA Signed Off To Delivered'] || 0)", "as": "e4"},
+    {"calculate": "isValid(datum['Pricing Cutoff Hr']) ? floor(datum['Pricing Cutoff Hr']) + ':' + pad(round((datum['Pricing Cutoff Hr'] % 1) * 60), 2, '0', 'left') : '–'", "as": "Pricing cut-off"},
+    {"calculate": "isValid(datum['Pricing Arrived Hr']) ? floor(datum['Pricing Arrived Hr']) + ':' + pad(round((datum['Pricing Arrived Hr'] % 1) * 60), 2, '0', 'left') : 'not logged'", "as": "Pricing arrived"},
+    {"calculate": "isValid(datum['Client Cutoff Hr']) ? floor(datum['Client Cutoff Hr']) + ':' + pad(round((datum['Client Cutoff Hr'] % 1) * 60), 2, '0', 'left') : '–'", "as": "Client cut-off"},
+    {"calculate": "floor(datum.e4) + ':' + pad(round((datum.e4 % 1) * 60), 2, '0', 'left')", "as": "Delivered"},
+    {"calculate": "round((datum['Bar Waiting After Pricing'] || 0) * 60) + ' min'", "as": "Waited after pricing"},
+    {"calculate": "round((datum['Bar NAV To Controlled'] || 0) * 60) + ' min'", "as": "NAV to Controlled"},
+    {"calculate": "isValid(datum['Client Cutoff Hr']) ? round((datum['Client Cutoff Hr'] - datum.e4) * 60) + ' min' : '–'", "as": "Headroom"}
+  ],
+  "encoding": {
+    "y": {
+      "field": "Fund_Label",
+      "type": "nominal",
+      "sort": {"field": "NAV Start Hr", "op": "min", "order": "ascending"},
+      "title": null,
+      "axis": {"labelFontSize": 11, "ticks": false, "domain": false}
+    },
+    "opacity": {
+      "condition": {"test": "datum.__selected__ == 'off'", "value": 0.3},
+      "value": 1
+    },
+    "tooltip": [
+      {"field": "Fund_Label", "title": "Fund"},
+      {"field": "Pricing cut-off"},
+      {"field": "Pricing arrived"},
+      {"field": "Waited after pricing"},
+      {"field": "NAV to Controlled"},
+      {"field": "Delivered"},
+      {"field": "Client cut-off"},
+      {"field": "Headroom"}
+    ]
+  },
+  "layer": [
+    {
+      "mark": {"type": "bar", "height": {"band": 0.6}, "clip": true},
+      "encoding": {
+        "x": {
+          "field": "s0", "type": "quantitative", "title": null,
+          "scale": {"domain": [9, 17], "nice": false},
+          "axis": {"values": [9, 10, 11, 12, 13, 14, 15, 16, 17], "labelExpr": "datum.value + ':00'", "grid": true}
+        },
+        "x2": {"field": "e1"},
+        "color": {
+          "datum": "Waiting after pricing",
+          "scale": {
+            "domain": ["Waiting after pricing", "NAV calculation to Controlled", "Controlled to FA signed off", "FA signed off to delivered"],
+            "range": ["#7B5EA7", "#2E9E5B", "#2F6FB0", "#E8A33D"]
+          }
+        }
+      }
+    },
+    {
+      "mark": {"type": "bar", "height": {"band": 0.6}, "clip": true},
+      "encoding": {"x": {"field": "e1", "type": "quantitative"}, "x2": {"field": "e2"}, "color": {"datum": "NAV calculation to Controlled"}}
+    },
+    {
+      "mark": {"type": "bar", "height": {"band": 0.6}, "clip": true},
+      "encoding": {"x": {"field": "e2", "type": "quantitative"}, "x2": {"field": "e3"}, "color": {"datum": "Controlled to FA signed off"}}
+    },
+    {
+      "mark": {"type": "bar", "height": {"band": 0.6}, "clip": true},
+      "encoding": {"x": {"field": "e3", "type": "quantitative"}, "x2": {"field": "e4"}, "color": {"datum": "FA signed off to delivered"}}
+    },
+    {
+      "description": "Client cut-off: red vertical tick. A bar crossing it is a breach.",
+      "mark": {"type": "tick", "orient": "vertical", "color": "#C8423B", "thickness": 2, "bandSize": 18, "clip": true},
+      "encoding": {"x": {"field": "Client Cutoff Hr", "type": "quantitative"}}
+    },
+    {
+      "description": "Pricing cut-off: hollow diamond.",
+      "mark": {"type": "point", "shape": "diamond", "filled": true, "fill": "white", "stroke": "#5B6573", "strokeWidth": 1.5, "size": 70, "clip": true},
+      "encoding": {"x": {"field": "Pricing Cutoff Hr", "type": "quantitative"}}
+    },
+    {
+      "description": "Pricing arrived: filled dark diamond.",
+      "mark": {"type": "point", "shape": "diamond", "filled": true, "color": "#1F2933", "size": 70, "clip": true},
+      "encoding": {"x": {"field": "Pricing Arrived Hr", "type": "quantitative"}}
+    }
+  ]
+}
