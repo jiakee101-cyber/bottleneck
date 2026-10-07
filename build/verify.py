@@ -44,13 +44,21 @@ for _,r in fw.iterrows():
 chk('TOP_SLA_Met',fw.TOP_SLA_Met,sla)
 mff=[];q=[];idle=[];other=[]
 W=pd.to_datetime(fw.NAV_Start_DT,errors='coerce'); U=pd.to_datetime(fw.Pricing_Arrival_DT,errors='coerce')
+R=pd.to_numeric(fw.Recon_Mins,errors='coerce')
+Zs=W-pd.to_timedelta(R,unit='m')
 for i,r in fw.iterrows():
     prev=W[(fw.Maker_Name==r.Maker_Name)&(fw.Process_Date==r.Process_Date)&(W<W[i])]
-    m=prev.max() if len(prev) else pd.NaT; mff.append(m)
+    mff.append(prev.max() if len(prev) else pd.NaT)
     wait=pd.to_numeric(pd.Series([r.Wait_After_Pricing_Mins]),errors='coerce')[0]
     if pd.isna(wait): q.append(np.nan); idle.append(np.nan); other.append(np.nan); continue
-    qq=0 if pd.isna(m) else max(0,min(wait,round((m-U[i]).total_seconds()/60)))
-    rb=pd.to_numeric(pd.Series([r.Recon_Mins]),errors='coerce').fillna(0)[0]
+    tot=0.0
+    if wait>0 and isinstance(r.Maker_Name,str):
+        for j,o in fw.iterrows():
+            if j==i or o.Maker_Name!=r.Maker_Name or o.Process_Date!=r.Process_Date or pd.isna(W[j]) or pd.isna(Zs[j]): continue
+            ov=(min(W[i],W[j])-max(U[i],Zs[j])).total_seconds()/60
+            tot+=max(0,ov)
+    qq=min(wait,int(np.floor(tot+0.5)))
+    rb=0 if pd.isna(R[i]) else R[i]
     own=int(np.floor(min(wait-qq,rb)+0.5)); q.append(qq); idle.append(own); other.append(wait-qq-own)
 chk('Maker_Free_From_DT',pd.to_datetime(fw.Maker_Free_From_DT,errors='coerce'),mff)
 chk('Queue_Wait_Mins',fw.Queue_Wait_Mins,q); chk('Own_Recon_Mins',fw.Own_Recon_Mins,idle); chk('Other_Holdup_Mins',fw.Other_Holdup_Mins,other)

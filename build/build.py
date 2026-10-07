@@ -133,12 +133,12 @@ FW = [
     ("Maker_Free_From_DT",
      '=IF($A{r}="","",IF(OR($L{r}="",$W{r}=""),"",IF(COUNTIFS($L:$L,$L{r},$B:$B,$B{r},$W:$W,"<"&$W{r})=0,"",'
      '_xlfn.MAXIFS($W:$W,$L:$L,$L{r},$B:$B,$B{r},$W:$W,"<"&$W{r}))))',
-     F_DT, 17, "RECONSTRUCTED. When this maker finished their previous fund on the same process date "
-     "(latest Calculated before this fund's). Blank if this was their first fund of the day."),
+     F_DT, 17, "REFERENCE ONLY. When this maker finished their previous fund on the same process date "
+     "(latest Calculated before this fund's). Queue no longer uses it: see Queue_Wait_Mins."),
     ("Queue_Wait_Mins",
-     '=IF($A{r}="","",IF($AC{r}="","",IF($BC{r}="",0,MAX(0,MIN($AC{r},ROUND(($BC{r}-$U{r})*1440,0))))))',
-     F_NUM, 11, "RECONSTRUCTED. Part of Wait_After_Pricing_Mins spent behind the maker's other funds "
-     "(pricing arrival to Maker_Free_From). Purple bar."),
+     '=IF($A{r}="","",IF($AC{r}="","",IF(OR($L{r}="",$AC{r}=0),0,MIN($AC{r},ROUND(ROUND(1440*SUMPRODUCT(($L$2:INDEX($L:$L,COUNTA($C:$C))=$L{r})*($B$2:INDEX($B:$B,COUNTA($C:$C))=$B{r})*(ROW($L$2:INDEX($L:$L,COUNTA($C:$C)))<>ROW())*((((($W{r}+$BT$2:INDEX($BT:$BT,COUNTA($C:$C))-ABS($W{r}-$BT$2:INDEX($BT:$BT,COUNTA($C:$C))))/2)-(($U{r}+$BS$2:INDEX($BS:$BS,COUNTA($C:$C))+ABS($U{r}-$BS$2:INDEX($BS:$BS,COUNTA($C:$C))))/2))+ABS(((($W{r}+$BT$2:INDEX($BT:$BT,COUNTA($C:$C))-ABS($W{r}-$BT$2:INDEX($BT:$BT,COUNTA($C:$C))))/2)-(($U{r}+$BS$2:INDEX($BS:$BS,COUNTA($C:$C))+ABS($U{r}-$BS$2:INDEX($BS:$BS,COUNTA($C:$C))))/2))))/2)),4),0)))))',
+     F_NUM, 11, "RECONSTRUCTED. Minutes, between pricing arrival and this fund's Calculated, when the same maker was "
+     "WORKING on another fund that day: overlap with the other fund-days' work windows (BS to BT). Purple bar."),
     ("Own_Recon_Mins", '=IF($A{r}="","",IF($AC{r}="","",ROUND(MIN($AC{r}-$BD{r},N($R{r})),0)))', F_NUM, 11,
      "RECONSTRUCTED. Part of the wait the maker spent on THIS fund's own reconciliation: its recon budget "
      "(Recon_Mins), capped at what is left after the queue. Same maker, real work, not idle."),
@@ -175,6 +175,10 @@ FW2 = [
     ("Other_Holdup_Mins", '=IF($A{r}="","",IF($AC{r}="","",$AC{r}-$BD{r}-$BE{r}))', F_NUM, 12,
      "RECONSTRUCTED. Wait not explained by other funds or by this fund's recon budget: data not ready, breaks, "
      "recon running over budget, or work not in the status log."),
+    ("Work_Start_Num", '=IF($A{r}="","",IF(AND(ISNUMBER($Z{r}),ISNUMBER($W{r})),$Z{r},0))', F_DT, 17,
+     "Helper for Queue_Wait_Mins: this fund-day's reconstructed work start (Implied_Work_Start_DT), 0 when unknown."),
+    ("Work_End_Num", '=IF($A{r}="","",IF(ISNUMBER($W{r}),$W{r},0))', F_DT, 17,
+     "Helper for Queue_Wait_Mins: this fund-day's Calculated time, 0 when unknown."),
 ]
 add_columns(wb["Fact_Work"], "BR", FW2, 301, "v4.5")
 # lookup column indexes must point at the intended Dim_Fund columns
@@ -235,13 +239,13 @@ for c in ("B", "C"):
     ws[f"{c}{r0}"].fill = PatternFill("solid", fgColor=NAVY)
 checks = [
     ("Fact_Work rows without v4.5 formulas", '=COUNT(Fact_Work!$A:$A)-(COUNTIF(Fact_Work!$BJ:$BJ,"?*")-1)',
-     "Target 0. Fill Fact_Work BA to BR down to the last data row, together with D to AZ."),
+     "Target 0. Fill Fact_Work BA to BT down to the last data row, together with D to AZ."),
     ("Fund-days with no client cut-off", '=COUNTIFS(Fact_Work!$A:$A,"<>",Fact_Work!$V:$V,"")',
      "Target 0. The fund's client cut-off is missing (0) in Dim_Fund, so breach is not scored. Exclude, do not guess."),
     ("Wait split does not add up", '=COUNTIF(Fact_Work!$BR:$BR,"<0")',
      "Target 0. Other hold-up below zero means the three-way wait split is broken for that row."),
     ("Share of wait behind other funds", '=IFERROR(SUM(Fact_Work!$BD:$BD)/SUM(Fact_Work!$AC:$AC),"")',
-     "Maker still finishing earlier funds. Reconstructed: busy assumed until their previous fund's Calculated time."),
+     "Same maker working on another fund (inside its reconstructed work window). Capacity signal."),
     ("Share of wait on own recon", '=IFERROR(SUM(Fact_Work!$BE:$BE)/SUM(Fact_Work!$AC:$AC),"")',
      "Same maker reconciling this fund, up to its recon budget. Work, not idle."),
     ("Share of wait other hold-up", '=IFERROR(SUM(Fact_Work!$BR:$BR)/SUM(Fact_Work!$AC:$AC),"")',
@@ -271,11 +275,12 @@ readme = [
     ("Thin slack", "Constants!B17, default 0 (zero tolerance). A feed is thin when its slack to the pricing cut-off is at "
      "or below it, so a late file reaches NAV directly. The broker watchlist keeps its own threshold in B14.", False),
     ("Wait after pricing — three parts", "Wait_After_Pricing_Mins = Queue_Wait_Mins + Own_Recon_Mins + Other_Holdup_Mins. "
-     "Queue = pricing arrival until the maker finished their previous fund that day (Maker_Free_From_DT, latest Calculated "
-     "before this fund's). Own recon = the same maker reconciling THIS fund, up to its Recon_Mins budget, taken from what "
+     "Queue = minutes between pricing arrival and this fund's Calculated when the same maker was WORKING on another "
+     "fund that day, i.e. inside that fund-day's work window (Work_Start_Num to Work_End_Num: Calculated minus its "
+     "recon budget, to Calculated). Hold-ups on the funds ahead are not passed down. Own recon = the same maker reconciling THIS fund, up to its Recon_Mins budget, taken from what "
      "is left. Other hold-up = the remainder: data not ready, breaks, recon over budget, or work not in the log. Nothing "
-     "is called idle: the maker usually does both recon and calculation. RECONSTRUCTED, not observed: queue assumes no "
-     "gaps between funds, and own recon uses the budget, not actual recon time.", False),
+     "is called idle: the maker usually does both recon and calculation. RECONSTRUCTED, not observed: both queue and own "
+     "recon use recon budgets, not actual work times, and only work in the status log is visible.", False),
     ("Possible cause", "Breached fund-days only, first match wins: Pricing late (this fund's own PSA cut-off), Thin custody "
      "slack, Broker-dependent, None of these. Custody, TA and broker arrivals are not captured, so only pricing is a "
      "measured cause.", False),
@@ -285,7 +290,7 @@ readme = [
      "missing, inventing a breach. It is now blank, and Headroom_After_Pricing_Mins is guarded for it. Checks counts them.", False),
     ("Fix: Checks C8", "Pointed to Constants!B13 (business days); the broker threshold is B14.", False),
     ("Moved from Dim_Signoff", sig_notes[0] + " " + sig_notes[1], False),
-    ("Filling down", "Fact_Work formulas now run D to AZ and BA to BR; Fact_Milestone D to M; Dim_Fund to BK; Dim_TOP to O.", False),
+    ("Filling down", "Fact_Work formulas now run D to AZ and BA to BT; Fact_Milestone D to M; Dim_Fund to BK; Dim_TOP to O.", False),
     ("Power Query", PQ_NOTE, False),
 ]
 r = 107
@@ -298,7 +303,7 @@ for a, b, is_hdr in readme:
         body(ws[f"B{r}"], b, wrap=True)
     r += 1
 body(ws["B25"], ws["B25"].value + " v4.5 adds 9 derived columns (BC to BK).")
-body(ws["B28"], ws["B28"].value + " v4.5 adds 18 Power BI columns (BA to BR).")
+body(ws["B28"], ws["B28"].value + " v4.5 adds 20 Power BI columns (BA to BT).")
 ws["B25"].alignment = ws["B28"].alignment = Alignment(wrap_text=True)
 
 # ---------------------------------------------------------------- PBI_Mapping sheet
