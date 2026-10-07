@@ -122,12 +122,15 @@ RETURN CALCULATE ( [Clients], Dim_TOP[TOP_ID] = t )"""),
          dax='CALCULATE ( [Breached Fund-Days], KEEPFILTERS ( Fact_Work[Pricing_Late_For_This_Fund] = "Yes" ) )'),
     dict(table="Fact_Work", name="Breaches Pricing Late %", folder="1 Supplier Risk\\KPIs", fmt=FP0,
          dax="DIVIDE ( [Breaches Pricing Late], [Breached Fund-Days] )"),
-    dict(table="Fact_Work", name="Idle Share of Wait", folder="1 Supplier Risk\\KPIs", fmt=FP0,
-         desc="Share of the wait after pricing while the maker was free (reconstructed).",
-         dax="""
-VAR q = SUM ( Fact_Work[Queue_Wait_Mins] )
-VAR i = SUM ( Fact_Work[Idle_Wait_Mins] )
-RETURN DIVIDE ( i, q + i )"""),
+    dict(table="Fact_Work", name="Queue Share of Wait", folder="1 Supplier Risk\\KPIs", fmt=FP0,
+         desc="Share of the wait after pricing spent behind the maker's other funds (reconstructed). Capacity signal.",
+         dax="DIVIDE ( SUM ( Fact_Work[Queue_Wait_Mins] ), SUM ( Fact_Work[Wait_After_Pricing_Mins] ) )"),
+    dict(table="Fact_Work", name="Own Recon Share of Wait", folder="1 Supplier Risk\\KPIs", fmt=FP0,
+         desc="Share of the wait the same maker spent reconciling this fund, up to its recon budget.",
+         dax="DIVIDE ( SUM ( Fact_Work[Own_Recon_Mins] ), SUM ( Fact_Work[Wait_After_Pricing_Mins] ) )"),
+    dict(table="Fact_Work", name="Other Holdup Share of Wait", folder="1 Supplier Risk\\KPIs", fmt=FP0,
+         desc="Share of the wait not explained by other funds or the recon budget: data, breaks, recon over budget.",
+         dax="DIVIDE ( SUM ( Fact_Work[Other_Holdup_Mins] ), SUM ( Fact_Work[Wait_After_Pricing_Mins] ) )"),
 
     # ------------------------------------------------------------------ page 1 exposure
     dict(table="Dim_Fund", name="Funds Label", folder="1 Supplier Risk\\Exposure",
@@ -201,9 +204,12 @@ IF (
     dict(table="Fact_Work", name="Avg Queue Wait", folder="1 Supplier Risk\\Waiting", fmt=F0,
          desc="Avg minutes per fund-day behind the maker's other funds (purple). Group-aware via Dim_WaitGroup.",
          dax=by_wait_group("AVERAGE ( Fact_Work[Queue_Wait_Mins] )")),
-    dict(table="Fact_Work", name="Avg Idle Wait", folder="1 Supplier Risk\\Waiting", fmt=F0,
-         desc="Avg minutes per fund-day while the maker was free (amber). Group-aware via Dim_WaitGroup.",
-         dax=by_wait_group("AVERAGE ( Fact_Work[Idle_Wait_Mins] )")),
+    dict(table="Fact_Work", name="Avg Own Recon Wait", folder="1 Supplier Risk\\Waiting", fmt=F0,
+         desc="Avg minutes per fund-day the same maker spent reconciling this fund, up to its recon budget (blue). Group-aware.",
+         dax=by_wait_group("AVERAGE ( Fact_Work[Own_Recon_Mins] )")),
+    dict(table="Fact_Work", name="Avg Other Holdup Wait", folder="1 Supplier Risk\\Waiting", fmt=F0,
+         desc="Avg minutes per fund-day not explained by other funds or the recon budget (amber). Group-aware.",
+         dax=by_wait_group("AVERAGE ( Fact_Work[Other_Holdup_Mins] )")),
     dict(table="Fact_Work", name="Wait Fund-Days", folder="1 Supplier Risk\\Waiting", fmt=FN,
          desc="Fund-days with a measured wait (pricing arrival logged). Group-aware.",
          dax=by_wait_group("COUNT ( Fact_Work[Wait_After_Pricing_Mins] )")),
@@ -336,7 +342,8 @@ VISUALS = [
     (P1, "KPI Breached fund-days", "Card", "", "[Breached Fund-Days]; subtitle [Breached Fund-Days Subtitle]", "", ""),
     (P1, "KPI Breaches, pricing late", "Card", "", "[Breaches Pricing Late %]; subtitle text", "",
      "Against each fund's own PSA cut-off (Pricing_Late_For_This_Fund)."),
-    (P1, "KPI Idle share of wait", "Card", "", "[Idle Share of Wait]", "", "Reconstructed, see README v4.5."),
+    (P1, "KPI Share of wait behind other funds", "Card", "", "[Queue Share of Wait]; alternatives [Own Recon Share of Wait], [Other Holdup Share of Wait]", "",
+     "Reconstructed, see README v4.5. The three shares add to 100%."),
     (P1, "Who is exposed — funds behind each TOP", "Clustered bar", "Y: Dim_TOP[TOP_ID]", "X: [Funds]",
      "Sort by [Funds] desc. Data label: [Funds Label] (custom label). Bar colour: fx field value [Exposure Bar Color]",
      "Design view: not limited by the date slicer."),
@@ -349,7 +356,7 @@ VISUALS = [
     (P1, "Pricing delay — reached the funds", "Clustered bar", "Y: Dim_TOP[TOP_ID]", "X: [Breached Fund-Days When Late]",
      "Sort by [Late Hours] desc (add it to tooltips to sort)", ""),
     (P1, "Where funds waited after pricing", "Stacked bar", "Y: Dim_WaitGroup[Wait_Group]",
-     "X: [Avg Queue Wait] (purple #7B5EA7) + [Avg Idle Wait] (amber #E8A33D)",
+     "X: [Avg Queue Wait] (purple #7B5EA7) + [Avg Own Recon Wait] (blue #2F6FB0) + [Avg Other Holdup Wait] (amber #E8A33D)",
      "Sort by Group_Order. Label n: [Wait n Label] in tooltip or a side card",
      "Groups overlap: a fund-day is in one broker group and one custody group."),
     (P1, "Breached fund-days by possible cause", "Stacked column", "X: Dim_Fund[Client_Name]", "Y: [Breached Fund-Days]",
@@ -379,3 +386,6 @@ PQ_NOTE = ("Pre-filled formula rows with no data load as empty rows, and blank f
            "number and date columns, e.g. Table.ReplaceValue(prev, \"\", null, Replacer.ReplaceValue, {\"Queue_Wait_Mins\", ...}); "
            "(3) set *_Hr, *_Mins, *_Num and Bar_* to Decimal Number, *_DT to Date/Time, NAV_Date and Process_Date to Date. "
            "Slack_*_Mins and Check_Mins hold 'n/a' and stay text; do the maths on the *_Num and Bar_* columns.")
+
+# Measures from the first v4.5 cut that the script removes when it finds them.
+OBSOLETE = ["Idle Share of Wait", "Avg Idle Wait"]

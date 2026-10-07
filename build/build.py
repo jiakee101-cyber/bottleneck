@@ -10,7 +10,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.comments import Comment
 from openpyxl.utils import get_column_letter, column_index_from_string as cidx
 
-from measures import MEASURES, VISUALS, RELATIONSHIPS, SORT_BY, PQ_NOTE
+from measures import MEASURES, VISUALS, RELATIONSHIPS, SORT_BY, PQ_NOTE, OBSOLETE
 
 src, dst, csx = sys.argv[1:4]
 wb = openpyxl.load_workbook(src)
@@ -139,8 +139,9 @@ FW = [
      '=IF($A{r}="","",IF($AC{r}="","",IF($BC{r}="",0,MAX(0,MIN($AC{r},ROUND(($BC{r}-$U{r})*1440,0))))))',
      F_NUM, 11, "RECONSTRUCTED. Part of Wait_After_Pricing_Mins spent behind the maker's other funds "
      "(pricing arrival to Maker_Free_From). Purple bar."),
-    ("Idle_Wait_Mins", '=IF($A{r}="","",IF($AC{r}="","",$AC{r}-$BD{r}))', F_NUM, 11,
-     "RECONSTRUCTED. Rest of the wait: maker free of other funds, so recon or upstream data. Amber bar."),
+    ("Own_Recon_Mins", '=IF($A{r}="","",IF($AC{r}="","",ROUND(MIN($AC{r}-$BD{r},N($R{r})),0)))', F_NUM, 11,
+     "RECONSTRUCTED. Part of the wait the maker spent on THIS fund's own reconciliation: its recon budget "
+     "(Recon_Mins), capped at what is left after the queue. Same maker, real work, not idle."),
     ("Broker_Dependent", '=IF($A{r}="","",IFERROR(VLOOKUP($C{r},Dim_Fund!$A:$BD,56,0),""))', "General", 12,
      "From Dim_Fund."),
     ("Custody_Slack_Group", '=IF($A{r}="","",IFERROR(VLOOKUP($C{r},Dim_Fund!$A:$BH,60,0),""))', "General", 20,
@@ -170,6 +171,12 @@ FW = [
      "Amber: FA signed off to delivered, hours. Offset plus the four bars ends at Delivered."),
 ]
 add_columns(wb["Fact_Work"], "BA", FW, 301, "v4.5")
+FW2 = [
+    ("Other_Holdup_Mins", '=IF($A{r}="","",IF($AC{r}="","",$AC{r}-$BD{r}-$BE{r}))', F_NUM, 12,
+     "RECONSTRUCTED. Wait not explained by other funds or by this fund's recon budget: data not ready, breaks, "
+     "recon running over budget, or work not in the status log."),
+]
+add_columns(wb["Fact_Work"], "BR", FW2, 301, "v4.5")
 # lookup column indexes must point at the intended Dim_Fund columns
 assert cidx("BD") == 56 and cidx("BH") == 60 and cidx("AI") == 35
 
@@ -228,13 +235,17 @@ for c in ("B", "C"):
     ws[f"{c}{r0}"].fill = PatternFill("solid", fgColor=NAVY)
 checks = [
     ("Fact_Work rows without v4.5 formulas", '=COUNT(Fact_Work!$A:$A)-(COUNTIF(Fact_Work!$BJ:$BJ,"?*")-1)',
-     "Target 0. Fill Fact_Work BA to BQ down to the last data row, together with D to AZ."),
+     "Target 0. Fill Fact_Work BA to BR down to the last data row, together with D to AZ."),
     ("Fund-days with no client cut-off", '=COUNTIFS(Fact_Work!$A:$A,"<>",Fact_Work!$V:$V,"")',
      "Target 0. The fund's client cut-off is missing (0) in Dim_Fund, so breach is not scored. Exclude, do not guess."),
-    ("Queue + idle not equal to wait", '=COUNTIF(Fact_Work!$BE:$BE,"<0")',
-     "Target 0. Idle wait below zero means the queue split is broken for that row."),
-    ("Share of wait spent idle", '=IFERROR(SUM(Fact_Work!$BE:$BE)/(SUM(Fact_Work!$BD:$BD)+SUM(Fact_Work!$BE:$BE)),"")',
-     "Page 1 'Idle share of wait'. Reconstructed: the maker is assumed busy until their previous fund's Calculated time."),
+    ("Wait split does not add up", '=COUNTIF(Fact_Work!$BR:$BR,"<0")',
+     "Target 0. Other hold-up below zero means the three-way wait split is broken for that row."),
+    ("Share of wait behind other funds", '=IFERROR(SUM(Fact_Work!$BD:$BD)/SUM(Fact_Work!$AC:$AC),"")',
+     "Maker still finishing earlier funds. Reconstructed: busy assumed until their previous fund's Calculated time."),
+    ("Share of wait on own recon", '=IFERROR(SUM(Fact_Work!$BE:$BE)/SUM(Fact_Work!$AC:$AC),"")',
+     "Same maker reconciling this fund, up to its recon budget. Work, not idle."),
+    ("Share of wait other hold-up", '=IFERROR(SUM(Fact_Work!$BR:$BR)/SUM(Fact_Work!$AC:$AC),"")',
+     "Not explained by queue or recon budget: data not ready, breaks, recon over budget, unlogged work."),
     ("Funds with thin custody slack", '=COUNTIF(Dim_Fund!$BE:$BE,"Yes")',
      "Slack at or below Constants!B17. With 0 tolerance, only funds whose custody cut-off is at or after pricing."),
     ("Funds with thin TA slack", '=COUNTIF(Dim_Fund!$BF:$BF,"Yes")', "As above for TA."),
@@ -259,10 +270,12 @@ readme = [
      "PBI_Mapping is documentation: do not load it.", False),
     ("Thin slack", "Constants!B17, default 0 (zero tolerance). A feed is thin when its slack to the pricing cut-off is at "
      "or below it, so a late file reaches NAV directly. The broker watchlist keeps its own threshold in B14.", False),
-    ("Queue vs idle wait", "Wait_After_Pricing_Mins is split in two. Queue = pricing arrival until the maker finished their "
-     "previous fund that day (Maker_Free_From_DT, latest Calculated before this fund's). Idle = the rest: the maker was "
-     "free of other funds, so the wait points to recon or upstream data. RECONSTRUCTED, not observed: it assumes the maker "
-     "was busy continuously until that previous fund, which overstates queue when they had gaps.", False),
+    ("Wait after pricing — three parts", "Wait_After_Pricing_Mins = Queue_Wait_Mins + Own_Recon_Mins + Other_Holdup_Mins. "
+     "Queue = pricing arrival until the maker finished their previous fund that day (Maker_Free_From_DT, latest Calculated "
+     "before this fund's). Own recon = the same maker reconciling THIS fund, up to its Recon_Mins budget, taken from what "
+     "is left. Other hold-up = the remainder: data not ready, breaks, recon over budget, or work not in the log. Nothing "
+     "is called idle: the maker usually does both recon and calculation. RECONSTRUCTED, not observed: queue assumes no "
+     "gaps between funds, and own recon uses the budget, not actual recon time.", False),
     ("Possible cause", "Breached fund-days only, first match wins: Pricing late (this fund's own PSA cut-off), Thin custody "
      "slack, Broker-dependent, None of these. Custody, TA and broker arrivals are not captured, so only pricing is a "
      "measured cause.", False),
@@ -272,7 +285,7 @@ readme = [
      "missing, inventing a breach. It is now blank, and Headroom_After_Pricing_Mins is guarded for it. Checks counts them.", False),
     ("Fix: Checks C8", "Pointed to Constants!B13 (business days); the broker threshold is B14.", False),
     ("Moved from Dim_Signoff", sig_notes[0] + " " + sig_notes[1], False),
-    ("Filling down", "Fact_Work formulas now run D to AZ and BA to BQ; Fact_Milestone D to M; Dim_Fund to BK; Dim_TOP to O.", False),
+    ("Filling down", "Fact_Work formulas now run D to AZ and BA to BR; Fact_Milestone D to M; Dim_Fund to BK; Dim_TOP to O.", False),
     ("Power Query", PQ_NOTE, False),
 ]
 r = 107
@@ -285,7 +298,7 @@ for a, b, is_hdr in readme:
         body(ws[f"B{r}"], b, wrap=True)
     r += 1
 body(ws["B25"], ws["B25"].value + " v4.5 adds 9 derived columns (BC to BK).")
-body(ws["B28"], ws["B28"].value + " v4.5 adds 17 Power BI columns (BA to BQ).")
+body(ws["B28"], ws["B28"].value + " v4.5 adds 18 Power BI columns (BA to BR).")
 ws["B25"].alignment = ws["B28"].alignment = Alignment(wrap_text=True)
 
 # ---------------------------------------------------------------- PBI_Mapping sheet
@@ -401,6 +414,10 @@ w("// ---- Measures")
 for m in MEASURES:
     w(f'AddMeasure({cs(m["table"])}, {cs(m["name"])}, {cs(m["folder"])}, {cs(m.get("fmt", ""))}, {cs(m.get("desc", ""))},')
     w(f'    {cs(m["dax"])});')
+w("")
+w("// ---- Measures replaced by the three-way wait split")
+for n in OBSOLETE:
+    w(f'{{ var old = Model.AllMeasures.FirstOrDefault(x => x.Name == {cs(n)}); if (old != null) {{ old.Delete(); log.AppendLine("Removed old measure " + {cs(n)}); }} }}')
 w("")
 w(f'log.Insert(0, "NAV Bottleneck v4.5: {len(MEASURES)} measures processed.\\n");')
 w("Info(log.ToString());")

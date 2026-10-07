@@ -1,6 +1,6 @@
 import pandas as pd, numpy as np, sys
 f=sys.argv[1]
-S=lambda s,k: (lambda d: d[d[k].notna() & (d[k].astype(str)!='')].reset_index(drop=True))(pd.read_excel(f,s))
+S=lambda s,k: (lambda d: d[d[k].notna() & (d[k].astype(str)!='')].reset_index(drop=True))(pd.read_excel(f,s,keep_default_na=False).replace('',np.nan))
 fund=S('Dim_Fund','Fund_ID'); top=S('Dim_TOP','TOP_ID'); fm=S('Fact_Milestone','Process_Date'); fw=S('Fact_Work','NAV_Date')
 thr=pd.read_excel(f,'Constants',header=None).iloc[16,1]
 bad=[]
@@ -42,17 +42,18 @@ for _,r in fw.iterrows():
     m=fm[(fm.Process_Date==r.Process_Date)&(fm.TOP_ID==r.TOP_ID)].SLA_Met
     sla.append('No' if (m=='No').any() else ('Yes' if (m=='Yes').any() else np.nan))
 chk('TOP_SLA_Met',fw.TOP_SLA_Met,sla)
-mff=[];q=[];idle=[]
+mff=[];q=[];idle=[];other=[]
 W=pd.to_datetime(fw.NAV_Start_DT,errors='coerce'); U=pd.to_datetime(fw.Pricing_Arrival_DT,errors='coerce')
 for i,r in fw.iterrows():
     prev=W[(fw.Maker_Name==r.Maker_Name)&(fw.Process_Date==r.Process_Date)&(W<W[i])]
     m=prev.max() if len(prev) else pd.NaT; mff.append(m)
     wait=pd.to_numeric(pd.Series([r.Wait_After_Pricing_Mins]),errors='coerce')[0]
-    if pd.isna(wait): q.append(np.nan); idle.append(np.nan); continue
+    if pd.isna(wait): q.append(np.nan); idle.append(np.nan); other.append(np.nan); continue
     qq=0 if pd.isna(m) else max(0,min(wait,round((m-U[i]).total_seconds()/60)))
-    q.append(qq); idle.append(wait-qq)
+    rb=pd.to_numeric(pd.Series([r.Recon_Mins]),errors='coerce').fillna(0)[0]
+    own=int(np.floor(min(wait-qq,rb)+0.5)); q.append(qq); idle.append(own); other.append(wait-qq-own)
 chk('Maker_Free_From_DT',pd.to_datetime(fw.Maker_Free_From_DT,errors='coerce'),mff)
-chk('Queue_Wait_Mins',fw.Queue_Wait_Mins,q); chk('Idle_Wait_Mins',fw.Idle_Wait_Mins,idle)
+chk('Queue_Wait_Mins',fw.Queue_Wait_Mins,q); chk('Own_Recon_Mins',fw.Own_Recon_Mins,idle); chk('Other_Holdup_Mins',fw.Other_Holdup_Mins,other)
 chk('Broker_Dependent_fw',fw.Broker_Dependent,fwm.Broker_Dependent_f); chk('Custody_Slack_Group_fw',fw.Custody_Slack_Group,fwm.Custody_Slack_Group_f)
 cause=['Not breached' if r.Breached!='Yes' else 'Pricing late' if r.Pricing_Late_For_This_Fund=='Yes' else 'Thin custody slack' if r.Custody_Slack_Group=='Thin custody slack' else 'Broker-dependent' if r.Broker_Dependent=='Yes' else 'None of these' for _,r in fw.iterrows()]
 chk('Possible_Cause',fw.Possible_Cause,cause)
@@ -68,5 +69,5 @@ dhr=(Y-Y.dt.normalize()).dt.total_seconds()/3600
 diff=(end-dhr).abs()
 print("bar stack vs delivery hr: max diff (hrs) =",round(diff.max(),4),"rows",len(diff))
 print("MISMATCHES:",len(bad)); [print(b) for b in bad[:20]]
-print(fw[['Fund_Label','Maker_Name','Wait_After_Pricing_Mins','Queue_Wait_Mins','Idle_Wait_Mins','Possible_Cause','TOP_SLA_Met']].to_string())
+print(fw[['Fund_Label','Maker_Name','Wait_After_Pricing_Mins','Queue_Wait_Mins','Own_Recon_Mins','Other_Holdup_Mins','Recon_Mins','Possible_Cause','TOP_SLA_Met']].to_string())
 print(top[['TOP_ID','Funds_In_TOP','Clients_In_TOP','Share_Of_Funds','TOP_Days_Scored','TOP_Days_Late','Late_Hours_Total','Breached_Fund_Days_When_Late']].to_string())

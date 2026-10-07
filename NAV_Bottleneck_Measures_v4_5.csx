@@ -109,10 +109,12 @@ AddMeasure(@"Fact_Work", @"Breaches Pricing Late", @"1 Supplier Risk\KPIs", @"#,
     @"CALCULATE ( [Breached Fund-Days], KEEPFILTERS ( Fact_Work[Pricing_Late_For_This_Fund] = ""Yes"" ) )");
 AddMeasure(@"Fact_Work", @"Breaches Pricing Late %", @"1 Supplier Risk\KPIs", @"0%", @"",
     @"DIVIDE ( [Breaches Pricing Late], [Breached Fund-Days] )");
-AddMeasure(@"Fact_Work", @"Idle Share of Wait", @"1 Supplier Risk\KPIs", @"0%", @"Share of the wait after pricing while the maker was free (reconstructed).",
-    @"VAR q = SUM ( Fact_Work[Queue_Wait_Mins] )
-VAR i = SUM ( Fact_Work[Idle_Wait_Mins] )
-RETURN DIVIDE ( i, q + i )");
+AddMeasure(@"Fact_Work", @"Queue Share of Wait", @"1 Supplier Risk\KPIs", @"0%", @"Share of the wait after pricing spent behind the maker's other funds (reconstructed). Capacity signal.",
+    @"DIVIDE ( SUM ( Fact_Work[Queue_Wait_Mins] ), SUM ( Fact_Work[Wait_After_Pricing_Mins] ) )");
+AddMeasure(@"Fact_Work", @"Own Recon Share of Wait", @"1 Supplier Risk\KPIs", @"0%", @"Share of the wait the same maker spent reconciling this fund, up to its recon budget.",
+    @"DIVIDE ( SUM ( Fact_Work[Own_Recon_Mins] ), SUM ( Fact_Work[Wait_After_Pricing_Mins] ) )");
+AddMeasure(@"Fact_Work", @"Other Holdup Share of Wait", @"1 Supplier Risk\KPIs", @"0%", @"Share of the wait not explained by other funds or the recon budget: data, breaks, recon over budget.",
+    @"DIVIDE ( SUM ( Fact_Work[Other_Holdup_Mins] ), SUM ( Fact_Work[Wait_After_Pricing_Mins] ) )");
 AddMeasure(@"Dim_Fund", @"Funds Label", @"1 Supplier Risk\Exposure", @"", @"Data label: 19 funds · 5 clients",
     @"[Funds] & "" funds · "" & [Clients] & "" clients""");
 AddMeasure(@"Dim_TOP", @"Exposure Bar Color", @"1 Supplier Risk\Exposure", @"", @"Conditional formatting (field value) for the exposure bars: red for the largest TOP.",
@@ -189,16 +191,27 @@ RETURN
         ""Ample custody slack"", CALCULATE ( AVERAGE ( Fact_Work[Queue_Wait_Mins] ), KEEPFILTERS ( Fact_Work[Custody_Slack_Group] = ""Ample custody slack"" ) ),
         AVERAGE ( Fact_Work[Queue_Wait_Mins] )
     )");
-AddMeasure(@"Fact_Work", @"Avg Idle Wait", @"1 Supplier Risk\Waiting", @"0", @"Avg minutes per fund-day while the maker was free (amber). Group-aware via Dim_WaitGroup.",
+AddMeasure(@"Fact_Work", @"Avg Own Recon Wait", @"1 Supplier Risk\Waiting", @"0", @"Avg minutes per fund-day the same maker spent reconciling this fund, up to its recon budget (blue). Group-aware.",
     @"VAR g = SELECTEDVALUE ( Dim_WaitGroup[Wait_Group] )
 RETURN
     SWITCH (
         g,
-        ""Broker-dependent"", CALCULATE ( AVERAGE ( Fact_Work[Idle_Wait_Mins] ), KEEPFILTERS ( Fact_Work[Broker_Dependent] = ""Yes"" ) ),
-        ""Not broker-dependent"", CALCULATE ( AVERAGE ( Fact_Work[Idle_Wait_Mins] ), KEEPFILTERS ( Fact_Work[Broker_Dependent] = ""No"" ) ),
-        ""Thin custody slack"", CALCULATE ( AVERAGE ( Fact_Work[Idle_Wait_Mins] ), KEEPFILTERS ( Fact_Work[Custody_Slack_Group] = ""Thin custody slack"" ) ),
-        ""Ample custody slack"", CALCULATE ( AVERAGE ( Fact_Work[Idle_Wait_Mins] ), KEEPFILTERS ( Fact_Work[Custody_Slack_Group] = ""Ample custody slack"" ) ),
-        AVERAGE ( Fact_Work[Idle_Wait_Mins] )
+        ""Broker-dependent"", CALCULATE ( AVERAGE ( Fact_Work[Own_Recon_Mins] ), KEEPFILTERS ( Fact_Work[Broker_Dependent] = ""Yes"" ) ),
+        ""Not broker-dependent"", CALCULATE ( AVERAGE ( Fact_Work[Own_Recon_Mins] ), KEEPFILTERS ( Fact_Work[Broker_Dependent] = ""No"" ) ),
+        ""Thin custody slack"", CALCULATE ( AVERAGE ( Fact_Work[Own_Recon_Mins] ), KEEPFILTERS ( Fact_Work[Custody_Slack_Group] = ""Thin custody slack"" ) ),
+        ""Ample custody slack"", CALCULATE ( AVERAGE ( Fact_Work[Own_Recon_Mins] ), KEEPFILTERS ( Fact_Work[Custody_Slack_Group] = ""Ample custody slack"" ) ),
+        AVERAGE ( Fact_Work[Own_Recon_Mins] )
+    )");
+AddMeasure(@"Fact_Work", @"Avg Other Holdup Wait", @"1 Supplier Risk\Waiting", @"0", @"Avg minutes per fund-day not explained by other funds or the recon budget (amber). Group-aware.",
+    @"VAR g = SELECTEDVALUE ( Dim_WaitGroup[Wait_Group] )
+RETURN
+    SWITCH (
+        g,
+        ""Broker-dependent"", CALCULATE ( AVERAGE ( Fact_Work[Other_Holdup_Mins] ), KEEPFILTERS ( Fact_Work[Broker_Dependent] = ""Yes"" ) ),
+        ""Not broker-dependent"", CALCULATE ( AVERAGE ( Fact_Work[Other_Holdup_Mins] ), KEEPFILTERS ( Fact_Work[Broker_Dependent] = ""No"" ) ),
+        ""Thin custody slack"", CALCULATE ( AVERAGE ( Fact_Work[Other_Holdup_Mins] ), KEEPFILTERS ( Fact_Work[Custody_Slack_Group] = ""Thin custody slack"" ) ),
+        ""Ample custody slack"", CALCULATE ( AVERAGE ( Fact_Work[Other_Holdup_Mins] ), KEEPFILTERS ( Fact_Work[Custody_Slack_Group] = ""Ample custody slack"" ) ),
+        AVERAGE ( Fact_Work[Other_Holdup_Mins] )
     )");
 AddMeasure(@"Fact_Work", @"Wait Fund-Days", @"1 Supplier Risk\Waiting", @"#,0", @"Fund-days with a measured wait (pricing arrival logged). Group-aware.",
     @"VAR g = SELECTEDVALUE ( Dim_WaitGroup[Wait_Group] )
@@ -295,5 +308,9 @@ AddMeasure(@"Fact_Work", @"Detail Font Color", @"2 Fund Level\Selected Fund", @"
     ""#C8423B"", ""#1F2933""
 )");
 
-log.Insert(0, "NAV Bottleneck v4.5: 56 measures processed.\n");
+// ---- Measures replaced by the three-way wait split
+{ var old = Model.AllMeasures.FirstOrDefault(x => x.Name == @"Idle Share of Wait"); if (old != null) { old.Delete(); log.AppendLine("Removed old measure " + @"Idle Share of Wait"); } }
+{ var old = Model.AllMeasures.FirstOrDefault(x => x.Name == @"Avg Idle Wait"); if (old != null) { old.Delete(); log.AppendLine("Removed old measure " + @"Avg Idle Wait"); } }
+
+log.Insert(0, "NAV Bottleneck v4.5: 59 measures processed.\n");
 Info(log.ToString());
