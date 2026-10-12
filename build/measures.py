@@ -359,15 +359,17 @@ RETURN
         ) + 0
     )"""),
     dict(table="Dim_Analyst", name="Rostered Analysts", folder=F_TL, fmt=FN,
-         desc="Active analysts whose shift (start to start + Constants!B18 hours) covers any part of this hour.",
-         dax="""
-VAR h0 = SELECTEDVALUE ( Dim_Hour[Hour_Start] )
+         desc="Makers on the selected date (active analysts who set at least one fund to Calculated that day) whose "
+              "shift (team start to start + Constants!B18 hours) covers any part of this hour.",
+         dax=f"""
+{TEAM_DATES}
+VAR makers = CALCULATETABLE ( VALUES ( Fact_Work[Maker_Name] ), {TEAM_SCOPE} )
 RETURN
     IF (
         ISBLANK ( h0 ), BLANK (),
         COUNTROWS (
             FILTER (
-                ALL ( Dim_Analyst ),
+                CALCULATETABLE ( Dim_Analyst, REMOVEFILTERS ( Dim_Analyst ), TREATAS ( makers, Dim_Analyst[Analyst_Name] ) ),
                 Dim_Analyst[Active] = "Yes"
                     && Dim_Analyst[Shift_Start_Hr] < h0 + 1
                     && Dim_Analyst[Shift_End_Hr] > h0
@@ -399,8 +401,26 @@ RETURN
         ) + 0
     )"""),
     dict(table="Dim_Analyst", name="Team Capacity Mins", folder=F_TL, fmt=FN,
-         desc="Rostered analysts in the hour x 60 minutes.",
-         dax="[Rostered Analysts] * 60"),
+         desc="Maker minutes available in this hour, 450 basis: for each maker of the selected date, minutes of their shift "
+              "inside the hour x (team Daily_Capacity_Mins / shift minutes). A full hour on a 9-hour, 450-minute day = 50.",
+         dax=f"""
+{TEAM_DATES}
+VAR makers = CALCULATETABLE ( VALUES ( Fact_Work[Maker_Name] ), {TEAM_SCOPE} )
+RETURN
+    IF (
+        ISBLANK ( h0 ), BLANK (),
+        SUMX (
+            FILTER (
+                CALCULATETABLE ( Dim_Analyst, REMOVEFILTERS ( Dim_Analyst ), TREATAS ( makers, Dim_Analyst[Analyst_Name] ) ),
+                Dim_Analyst[Active] = "Yes"
+                    && Dim_Analyst[Shift_Start_Hr] < h0 + 1
+                    && Dim_Analyst[Shift_End_Hr] > h0
+            ),
+            VAR onShift = MIN ( h0 + 1, Dim_Analyst[Shift_End_Hr] ) - MAX ( h0, Dim_Analyst[Shift_Start_Hr] )
+            VAR perMin = DIVIDE ( Dim_Analyst[Capacity_Mins], ( Dim_Analyst[Shift_End_Hr] - Dim_Analyst[Shift_Start_Hr] ) * 60 )
+            RETURN 60 * onShift * perMin
+        ) + 0
+    )"""),
     dict(table="Fact_Work", name="Team Load %", folder=F_TL, fmt=FP0,
          desc="Work in hand / team time available in the hour. Over 100%: more work in hand than the team can do in that "
               "hour, so it carries over.",
@@ -476,7 +496,7 @@ VISUALS = [
      "Analytics pane: Y-axis constant line at 1 (= 100%), dashed. Tooltips: [Work In Hand Mins], [Team Capacity Mins], "
      "[Rostered Analysts], [Cutoffs Due In Hour], [Funds Awaiting Control].",
      "Whole team for the selected date: ignores the client and fund slicers by design. Edit interactions: timeline to None. "
-     "Needs Dim_Hour and Dim_Analyst loaded."),
+     "Needs Dim_Hour and Dim_Analyst loaded (Capacity_Mins, Shift_Start_Hr, Shift_End_Hr as numbers)."),
     (P2, "Selected fund table", "Table", "Rows: Dim_DetailRow[Detail]", "[Detail Value]",
      "Sort by Detail_Order. Font colour: fx field value [Detail Font Color]. Title: [Selected Fund Title]",
      "Shows values when one fund is selected (click a bar; set the timeline to cross-filter this table)."),

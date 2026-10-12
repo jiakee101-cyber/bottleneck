@@ -343,14 +343,21 @@ RETURN
             Fact_Work[Control_Start_Hr] < h0 + 1, Fact_Work[Control_End_Hr] > h0
         ) + 0
     )");
-AddMeasure(@"Dim_Analyst", @"Rostered Analysts", @"2 Fund Level\Team Load", @"#,0", @"Active analysts whose shift (start to start + Constants!B18 hours) covers any part of this hour.",
+AddMeasure(@"Dim_Analyst", @"Rostered Analysts", @"2 Fund Level\Team Load", @"#,0", @"Makers on the selected date (active analysts who set at least one fund to Calculated that day) whose shift (team start to start + Constants!B18 hours) covers any part of this hour.",
     @"VAR h0 = SELECTEDVALUE ( Dim_Hour[Hour_Start] )
+VAR d =
+    CALCULATETABLE (
+        VALUES ( Fact_Work[Process_Date] ),
+        REMOVEFILTERS ( Dim_Fund ), REMOVEFILTERS ( Dim_TOP ), REMOVEFILTERS ( Dim_Cause ),
+        REMOVEFILTERS ( Fact_Work[Fund_ID] ), REMOVEFILTERS ( Fact_Work[Fund_Label] )
+    )
+VAR makers = CALCULATETABLE ( VALUES ( Fact_Work[Maker_Name] ), REMOVEFILTERS ( Dim_Fund ), REMOVEFILTERS ( Dim_TOP ), REMOVEFILTERS ( Dim_Cause ), REMOVEFILTERS ( Fact_Work ), TREATAS ( d, Fact_Work[Process_Date] ) )
 RETURN
     IF (
         ISBLANK ( h0 ), BLANK (),
         COUNTROWS (
             FILTER (
-                ALL ( Dim_Analyst ),
+                CALCULATETABLE ( Dim_Analyst, REMOVEFILTERS ( Dim_Analyst ), TREATAS ( makers, Dim_Analyst[Analyst_Name] ) ),
                 Dim_Analyst[Active] = ""Yes""
                     && Dim_Analyst[Shift_Start_Hr] < h0 + 1
                     && Dim_Analyst[Shift_End_Hr] > h0
@@ -384,8 +391,30 @@ RETURN
             REMOVEFILTERS ( Dim_Fund ), REMOVEFILTERS ( Dim_TOP ), REMOVEFILTERS ( Dim_Cause ), REMOVEFILTERS ( Fact_Work ), TREATAS ( d, Fact_Work[Process_Date] )
         ) + 0
     )");
-AddMeasure(@"Dim_Analyst", @"Team Capacity Mins", @"2 Fund Level\Team Load", @"#,0", @"Rostered analysts in the hour x 60 minutes.",
-    @"[Rostered Analysts] * 60");
+AddMeasure(@"Dim_Analyst", @"Team Capacity Mins", @"2 Fund Level\Team Load", @"#,0", @"Maker minutes available in this hour, 450 basis: for each maker of the selected date, minutes of their shift inside the hour x (team Daily_Capacity_Mins / shift minutes). A full hour on a 9-hour, 450-minute day = 50.",
+    @"VAR h0 = SELECTEDVALUE ( Dim_Hour[Hour_Start] )
+VAR d =
+    CALCULATETABLE (
+        VALUES ( Fact_Work[Process_Date] ),
+        REMOVEFILTERS ( Dim_Fund ), REMOVEFILTERS ( Dim_TOP ), REMOVEFILTERS ( Dim_Cause ),
+        REMOVEFILTERS ( Fact_Work[Fund_ID] ), REMOVEFILTERS ( Fact_Work[Fund_Label] )
+    )
+VAR makers = CALCULATETABLE ( VALUES ( Fact_Work[Maker_Name] ), REMOVEFILTERS ( Dim_Fund ), REMOVEFILTERS ( Dim_TOP ), REMOVEFILTERS ( Dim_Cause ), REMOVEFILTERS ( Fact_Work ), TREATAS ( d, Fact_Work[Process_Date] ) )
+RETURN
+    IF (
+        ISBLANK ( h0 ), BLANK (),
+        SUMX (
+            FILTER (
+                CALCULATETABLE ( Dim_Analyst, REMOVEFILTERS ( Dim_Analyst ), TREATAS ( makers, Dim_Analyst[Analyst_Name] ) ),
+                Dim_Analyst[Active] = ""Yes""
+                    && Dim_Analyst[Shift_Start_Hr] < h0 + 1
+                    && Dim_Analyst[Shift_End_Hr] > h0
+            ),
+            VAR onShift = MIN ( h0 + 1, Dim_Analyst[Shift_End_Hr] ) - MAX ( h0, Dim_Analyst[Shift_Start_Hr] )
+            VAR perMin = DIVIDE ( Dim_Analyst[Capacity_Mins], ( Dim_Analyst[Shift_End_Hr] - Dim_Analyst[Shift_Start_Hr] ) * 60 )
+            RETURN 60 * onShift * perMin
+        ) + 0
+    )");
 AddMeasure(@"Fact_Work", @"Team Load %", @"2 Fund Level\Team Load", @"0%", @"Work in hand / team time available in the hour. Over 100%: more work in hand than the team can do in that hour, so it carries over.",
     @"DIVIDE ( [Work In Hand Mins], [Team Capacity Mins] )");
 AddMeasure(@"Fact_Work", @"Team Load Color", @"2 Fund Level\Team Load", @"", @"Conditional formatting (field value) for the load bars: green under 80%, amber 80-100%, red over 100%.",
