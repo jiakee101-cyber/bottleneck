@@ -181,6 +181,39 @@ FW2 = [
      "Helper for Queue_Wait_Mins: this fund-day's Calculated time, 0 when unknown."),
 ]
 add_columns(wb["Fact_Work"], "BR", FW2, 301, "v4.5")
+
+# ---------------------------------------------------------------- Team load by hour (page 2)
+ws = wb["Constants"]
+assert ws["A18"].value is None
+body(ws["A18"], "Shift length (hrs)")
+body(ws["B18"], 9, "0", BLUE_TXT)
+body(ws["C18"], "INPUT — v4.5. Hours on desk including breaks, the same for every team. Shift end = Dim_Team shift start "
+     "+ this. Drives the 'rostered analysts' line on the Team load by hour chart.", color=GREY_TXT, wrap=True)
+add_columns(wb["Dim_Team"], "G", [
+    ("Shift_End_Hr", '=IF($A{r}="","",$F{r}+Constants!$B$18)', "0.00", 12,
+     "Shift start + Constants!B18. Two-shift teams are treated as one shift: their second shift is not captured."),
+], 39, "v4.5")
+add_columns(wb["Dim_Analyst"], "Q", [
+    ("Shift_End_Hr", '=IF($A{r}="","",IFERROR(VLOOKUP($B{r},Dim_Team!$A:$G,7,0),""))', "0.00", 12,
+     "From Dim_Team. With Shift_Start_Hr (E) it says which hours this analyst is rostered."),
+], 200, "v4.5")
+FW3 = [
+    ("Control_Start_Hr", '=IF($A{r}="","",IF(ISNUMBER($W{r}),ROUND(($W{r}-$B{r})*24,4),""))', "0.00", 12,
+     "Calculated time as hours from midnight of the processing date (14.5 = 14:30). Start of 'awaiting control'."),
+    ("Control_End_Hr", '=IF($A{r}="","",IF(ISNUMBER($X{r}),ROUND(($X{r}-$B{r})*24,4),""))', "0.00", 12,
+     "NAV_End_DT as hours from midnight of the processing date: Controlled, or FA signed off for client sign-off funds."),
+    ("Control_Window_Status",
+     '=IF($A{r}="","",IF(NOT(ISNUMBER($W{r})),"Missing Calculated",IF(NOT(ISNUMBER($X{r})),'
+     'IF($E{r}="Client","Missing FA signed off","Missing Controlled"),IF($X{r}<$W{r},"End before start","OK"))))',
+     "General", 16, "OK = counted in the control workload. Anything else is left out of the chart and counted on Checks."),
+]
+add_columns(wb["Fact_Work"], "BU", FW3, 301, "v4.5")
+add_columns(wb["Status_Log"], "I", [
+    ("Log_Hr", '=IF($D{r}="","",IF(ISNUMBER($E{r}),FLOOR(($E{r}-$B{r})*24,1),""))', "0", 8,
+     "Hour of the status change, counted from midnight of the processing date (14 = 14:00 to 14:59)."),
+    ("Active_Analyst", '=IF($D{r}="","",IFERROR(IF(VLOOKUP($F{r},Dim_Analyst!$A:$C,3,0)="Yes","Yes","No"),"No"))', "General", 10,
+     "Yes when the person is an active analyst in Dim_Analyst. External approvers are No and not counted as team capacity."),
+], 2001, "v4.5")
 # lookup column indexes must point at the intended Dim_Fund columns
 assert cidx("BD") == 56 and cidx("BH") == 60 and cidx("AI") == 35
 
@@ -230,6 +263,10 @@ static_sheet("Dim_DetailRow", ["Detail", "Detail_Order"],
              [["Pricing cut-off", 1], ["Pricing arrived", 2], ["NAV started", 3], ["Controlled", 4],
               ["FA signed off", 5], ["Delivered", 6], ["Client cut-off", 7], ["Headroom", 8],
               ["Waited after pricing", 9], ["NAV to Controlled", 10]])
+dh = static_sheet("Dim_Hour", ["Hour_Start", "Hour_End", "Hour_Label"], [[h, None, None] for h in range(7, 21)])
+for i in range(2, 16):
+    body(dh[f"B{i}"], f"=A{i}+1")
+    body(dh[f"C{i}"], f'=TEXT(A{i},"00")&":00"')
 
 # ---------------------------------------------------------------- Checks additions
 ws = wb["Checks"]
@@ -239,7 +276,7 @@ for c in ("B", "C"):
     ws[f"{c}{r0}"].fill = PatternFill("solid", fgColor=NAVY)
 checks = [
     ("Fact_Work rows without v4.5 formulas", '=COUNT(Fact_Work!$A:$A)-(COUNTIF(Fact_Work!$BJ:$BJ,"?*")-1)',
-     "Target 0. Fill Fact_Work BA to BT down to the last data row, together with D to AZ."),
+     "Target 0. Fill Fact_Work BA to BW down to the last data row, together with D to AZ."),
     ("Fund-days with no client cut-off", '=COUNTIFS(Fact_Work!$A:$A,"<>",Fact_Work!$V:$V,"")',
      "Target 0. The fund's client cut-off is missing (0) in Dim_Fund, so breach is not scored. Exclude, do not guess."),
     ("Wait split does not add up", '=COUNTIF(Fact_Work!$BR:$BR,"<0")',
@@ -256,6 +293,12 @@ checks = [
     ("Broker-dependent funds", '=COUNTIF(Dim_Fund!$BD:$BD,"Yes")', "Has_Broker_Process = Yes."),
     ("Breached fund-days with a possible cause", '=COUNTIFS(Fact_Work!$BH:$BH,"?*",Fact_Work!$BH:$BH,"<>Not breached")-COUNTIF(Fact_Work!$BH:$BH,"Possible_Cause")',
      "Must equal 'Breached cycles' above."),
+    ("Fund-days left out of the control workload", '=COUNTIF(Fact_Work!$BW:$BW,"Missing*")+COUNTIF(Fact_Work!$BW:$BW,"End before start")',
+     "Target 0. No Calculated, no Controlled (or no FA signed off for client sign-off funds), or the end is before the start. Not shown on Team load by hour."),
+    ("Client cut-offs outside the chart hours", '=COUNTIFS(Fact_Work!$BI:$BI,"<"&MIN(Dim_Hour!$A:$A))+COUNTIFS(Fact_Work!$BI:$BI,">="&(MAX(Dim_Hour!$A:$A)+1))',
+     "Fund-days whose client cut-off falls before or after the hours listed in Dim_Hour. Add rows to Dim_Hour if this is not 0."),
+    ("Teams with two shifts", '=COUNTIF(Dim_Team!$D:$D,">1")',
+     "The rostered line treats every team as one 9-hour shift from Shift_Start. Two-shift teams are understated."),
 ]
 for i, (a, b, c) in enumerate(checks, r0 + 1):
     body(ws[f"A{i}"], a)
@@ -290,7 +333,13 @@ readme = [
      "missing, inventing a breach. It is now blank, and Headroom_After_Pricing_Mins is guarded for it. Checks counts them.", False),
     ("Fix: Checks C8", "Pointed to Constants!B13 (business days); the broker threshold is B14.", False),
     ("Moved from Dim_Signoff", sig_notes[0] + " " + sig_notes[1], False),
-    ("Filling down", "Fact_Work formulas now run D to AZ and BA to BT; Fact_Milestone D to M; Dim_Fund to BK; Dim_TOP to O.", False),
+    ("Team load by hour", "Page 2 chart for one processing date, whole team (client and fund filters ignored). Columns: client "
+     "cut-offs due in each hour (Client_Cutoff_Hr), and fund-days awaiting control in that hour: Calculated but not yet "
+     "Controlled, or not yet FA signed off for client sign-off funds (Control_Start_Hr to Control_End_Hr, counted in every "
+     "hour the window touches). Lines: rostered analysts (active, shift start to start + Constants!B18 hours) and analysts "
+     "seen working (active people with any status change in that hour, Status_Log I:J). Rows whose control window is not "
+     "OK are left out and counted on Checks. Dim_Hour lists the hours shown.", False),
+    ("Filling down", "Fact_Work formulas now run D to AZ and BA to BW; Status_Log G to J; Dim_Analyst to Q; Dim_Team to G; Fact_Milestone D to M; Dim_Fund to BK; Dim_TOP to O.", False),
     ("Power Query", PQ_NOTE, False),
 ]
 r = 107
@@ -303,7 +352,7 @@ for a, b, is_hdr in readme:
         body(ws[f"B{r}"], b, wrap=True)
     r += 1
 body(ws["B25"], ws["B25"].value + " v4.5 adds 9 derived columns (BC to BK).")
-body(ws["B28"], ws["B28"].value + " v4.5 adds 20 Power BI columns (BA to BT).")
+body(ws["B28"], ws["B28"].value + " v4.5 adds 23 Power BI columns (BA to BW).")
 ws["B25"].alignment = ws["B28"].alignment = Alignment(wrap_text=True)
 
 # ---------------------------------------------------------------- PBI_Mapping sheet
