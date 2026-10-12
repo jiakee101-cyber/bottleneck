@@ -426,10 +426,40 @@ RETURN
               "hour, so it carries over.",
          dax="DIVIDE ( [Work In Hand Mins], [Team Capacity Mins] )"),
     dict(table="Fact_Work", name="Team Load Color", folder=F_TL,
-         desc="Conditional formatting (field value) for the load bars: green under 80%, amber 80-100%, red over 100%.",
+         desc="Conditional formatting (field value) for the work-in-hand columns: dark purple = work in hand but no maker "
+              "on shift (after shift), red over 100%, amber 80-100%, green under 80%.",
          dax="""
-VAR l = [Team Load %]
-RETURN SWITCH ( TRUE (), ISBLANK ( l ), BLANK (), l > 1, "#C8423B", l > 0.8, "#E8A33D", "#2E9E5B" )"""),
+VAR w = [Work In Hand Mins]
+VAR c = [Team Capacity Mins]
+RETURN
+    SWITCH (
+        TRUE (),
+        ISBLANK ( w ) || w = 0, BLANK (),
+        c = 0, "#5B3F8C",
+        w / c > 1, "#C8423B",
+        w / c > 0.8, "#E8A33D",
+        "#2E9E5B"
+    )"""),
+    dict(table="Fact_Work", name="Team Load Label", folder=F_TL,
+         desc="Data label for the work-in-hand columns: load %, or 'after shift' when work is in hand but no maker is on shift.",
+         dax="""
+VAR w = [Work In Hand Mins]
+VAR c = [Team Capacity Mins]
+RETURN
+    IF (
+        ISBLANK ( w ) || w = 0, BLANK (),
+        IF ( c = 0, "after shift", FORMAT ( DIVIDE ( w, c ), "0%" ) )
+    )"""),
+    dict(table="Fact_Work", name="Work Outside Shift Mins", folder=F_TL, fmt=FN,
+         desc="Budgeted maker minutes in hand during hours with no maker on shift. On the chart: per hour. On a card: "
+              "the day's total across the hours in Dim_Hour.",
+         dax="""
+SUMX (
+    VALUES ( Dim_Hour[Hour_Start] ),
+    VAR w = [Work In Hand Mins]
+    VAR c = [Team Capacity Mins]
+    RETURN IF ( c = 0, w, 0 )
+)"""),
 ]
 
 RELATIONSHIPS = [
@@ -491,11 +521,13 @@ VISUALS = [
      "[Pricing Arrived Hr], [Client Cutoff Hr]",
      "The native bar chart has no point markers. For the cut-off/arrival markers use error bars on the matching measure, "
      "or a Deneb visual."),
-    (P2, "Team load by hour", "Clustered column chart", "X: Dim_Hour[Hour_Label] (sorted by Hour_Start)",
-     "Y: [Team Load %]. Bar colour: fx, Field value, [Team Load Color]. Data labels on.",
-     "Analytics pane: Y-axis constant line at 1 (= 100%), dashed. Tooltips: [Work In Hand Mins], [Team Capacity Mins], "
-     "[Rostered Analysts], [Cutoffs Due In Hour], [Funds Awaiting Control].",
-     "Whole team for the selected date: ignores the client and fund slicers by design. Edit interactions: timeline to None. "
+    (P2, "Team load by hour", "Line and clustered column chart", "X: Dim_Hour[Hour_Label] (sorted by Hour_Start; Show items with no data on)",
+     "Columns: [Work In Hand Mins], colour fx Field value [Team Load Color]. Line: [Team Capacity Mins] (grey). "
+     "Data labels on the columns: custom value [Team Load Label].",
+     "Secondary Y-axis off (both series are minutes). Tooltips: [Team Load %], [Rostered Analysts], [Work Outside Shift Mins], "
+     "[Cutoffs Due In Hour], [Funds Awaiting Control]. Card beside it: [Work Outside Shift Mins].",
+     "Whole team for the selected date: ignores the client and fund slicers by design. Columns above the line = over capacity; "
+     "dark purple columns = work in hand with no maker on shift. Edit interactions: timeline to None. "
      "Needs Dim_Hour and Dim_Analyst loaded (Capacity_Mins, Shift_Start_Hr, Shift_End_Hr as numbers)."),
     (P2, "Selected fund table", "Table", "Rows: Dim_DetailRow[Detail]", "[Detail Value]",
      "Sort by Detail_Order. Font colour: fx field value [Detail Font Color]. Title: [Selected Fund Title]",

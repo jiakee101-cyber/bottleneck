@@ -350,7 +350,7 @@ readme = [
      "Calculated + its NAV budget (Fact_Work BX:BZ). Team time = makers of that date (active analysts who set at least one fund "
      "to Calculated) on shift in the hour (shift start to start + Constants!B18 hours), at the 450 basis: minutes on shift "
      "x Daily_Capacity_Mins / shift minutes, i.e. 50 per full hour on a 9-hour shift, prorated for part-hours. Makers who did "
-     "no Calculated that day are not counted. Over 100% means more work in hand than the team can do in that hour, so it carries over. Check time is not "
+     "no Calculated that day are not counted. Over 100% means more work in hand than the team can do in that hour, so it carries over. The chart shows work in hand (columns) against capacity (line), both in minutes, so hours with work but no maker on shift stay visible (dark purple, label 'after shift'); Work Outside Shift Mins totals them. Check time is not "
      "budgeted in the template, so it is not in the load. Tooltips keep cut-offs due and funds awaiting control (BU:BW). "
      "Status_Log I:J are no longer used by the report and can stay or be deleted.", False),
     ("Filling down", "Fact_Work formulas now run D to AZ and BA to BZ; Status_Log G to J; Dim_Analyst to Q; Dim_Team to G; Fact_Milestone D to M; Dim_Fund to BK; Dim_TOP to O.", False),

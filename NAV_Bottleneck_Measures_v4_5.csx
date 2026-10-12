@@ -417,9 +417,33 @@ RETURN
     )");
 AddMeasure(@"Fact_Work", @"Team Load %", @"2 Fund Level\Team Load", @"0%", @"Work in hand / team time available in the hour. Over 100%: more work in hand than the team can do in that hour, so it carries over.",
     @"DIVIDE ( [Work In Hand Mins], [Team Capacity Mins] )");
-AddMeasure(@"Fact_Work", @"Team Load Color", @"2 Fund Level\Team Load", @"", @"Conditional formatting (field value) for the load bars: green under 80%, amber 80-100%, red over 100%.",
-    @"VAR l = [Team Load %]
-RETURN SWITCH ( TRUE (), ISBLANK ( l ), BLANK (), l > 1, ""#C8423B"", l > 0.8, ""#E8A33D"", ""#2E9E5B"" )");
+AddMeasure(@"Fact_Work", @"Team Load Color", @"2 Fund Level\Team Load", @"", @"Conditional formatting (field value) for the work-in-hand columns: dark purple = work in hand but no maker on shift (after shift), red over 100%, amber 80-100%, green under 80%.",
+    @"VAR w = [Work In Hand Mins]
+VAR c = [Team Capacity Mins]
+RETURN
+    SWITCH (
+        TRUE (),
+        ISBLANK ( w ) || w = 0, BLANK (),
+        c = 0, ""#5B3F8C"",
+        w / c > 1, ""#C8423B"",
+        w / c > 0.8, ""#E8A33D"",
+        ""#2E9E5B""
+    )");
+AddMeasure(@"Fact_Work", @"Team Load Label", @"2 Fund Level\Team Load", @"", @"Data label for the work-in-hand columns: load %, or 'after shift' when work is in hand but no maker is on shift.",
+    @"VAR w = [Work In Hand Mins]
+VAR c = [Team Capacity Mins]
+RETURN
+    IF (
+        ISBLANK ( w ) || w = 0, BLANK (),
+        IF ( c = 0, ""after shift"", FORMAT ( DIVIDE ( w, c ), ""0%"" ) )
+    )");
+AddMeasure(@"Fact_Work", @"Work Outside Shift Mins", @"2 Fund Level\Team Load", @"#,0", @"Budgeted maker minutes in hand during hours with no maker on shift. On the chart: per hour. On a card: the day's total across the hours in Dim_Hour.",
+    @"SUMX (
+    VALUES ( Dim_Hour[Hour_Start] ),
+    VAR w = [Work In Hand Mins]
+    VAR c = [Team Capacity Mins]
+    RETURN IF ( c = 0, w, 0 )
+)");
 
 // ---- Measures replaced by the three-way wait split
 { var old = Model.AllMeasures.FirstOrDefault(x => x.Name == @"Idle Share of Wait"); if (old != null) { old.Delete(); log.AppendLine("Removed old measure " + @"Idle Share of Wait"); } }
@@ -428,5 +452,5 @@ RETURN SWITCH ( TRUE (), ISBLANK ( l ), BLANK (), l > 1, ""#C8423B"", l > 0.8, "
 { var old = Model.AllMeasures.FirstOrDefault(x => x.Name == @"Cutoffs Per Rostered Analyst"); if (old != null) { old.Delete(); log.AppendLine("Removed old measure " + @"Cutoffs Per Rostered Analyst"); } }
 { var old = Model.AllMeasures.FirstOrDefault(x => x.Name == @"Awaiting Control Per Rostered Analyst"); if (old != null) { old.Delete(); log.AppendLine("Removed old measure " + @"Awaiting Control Per Rostered Analyst"); } }
 
-log.Insert(0, "NAV Bottleneck v4.5: 66 measures processed.\n");
+log.Insert(0, "NAV Bottleneck v4.5: 68 measures processed.\n");
 Info(log.ToString());
