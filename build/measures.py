@@ -374,26 +374,42 @@ RETURN
             )
         ) + 0
     )"""),
-    dict(table="Status_Log", name="Analysts Seen Working", folder=F_TL, fmt=FN,
-         desc="Active analysts with any status change in this hour on the selected date.",
+    dict(table="Fact_Work", name="Work In Hand Mins", folder=F_TL, fmt=FN,
+         desc="Whole team, selected date: budgeted maker minutes (recon + NAV) still to do on fund-days in hand during "
+              "this hour. In hand = from pricing arrival, or from recon start if earlier, until the NAV budget is used up.",
          dax=f"""
 {TEAM_DATES}
 RETURN
     IF (
         ISBLANK ( h0 ), BLANK (),
         CALCULATE (
-            DISTINCTCOUNT ( Status_Log[Log_Person_Name] ),
-            TREATAS ( d, Status_Log[Log_Process_Date] ),
-            Status_Log[Active_Analyst] = "Yes",
-            Status_Log[Log_Hr] = h0
+            SUMX (
+                FILTER (
+                    Fact_Work,
+                    NOT ISBLANK ( Fact_Work[InHand_Hr] )
+                        && NOT ISBLANK ( Fact_Work[NAV_Done_Hr] )
+                        && Fact_Work[InHand_Hr] < h0 + 1
+                        && Fact_Work[NAV_Done_Hr] > h0
+                ),
+                VAR t = MAX ( h0, Fact_Work[InHand_Hr] )
+                VAR s = MAX ( t, Fact_Work[Work_Start_Hr] )
+                RETURN 60 * MAX ( 0, Fact_Work[NAV_Done_Hr] - s )
+            ),
+            {TEAM_SCOPE}
         ) + 0
     )"""),
-    dict(table="Fact_Work", name="Cutoffs Per Rostered Analyst", folder=F_TL, fmt="0.0",
-         desc="Tooltip: client cut-offs due in the hour per rostered analyst.",
-         dax="DIVIDE ( [Cutoffs Due In Hour], [Rostered Analysts] )"),
-    dict(table="Fact_Work", name="Awaiting Control Per Rostered Analyst", folder=F_TL, fmt="0.0",
-         desc="Tooltip: fund-days awaiting control in the hour per rostered analyst.",
-         dax="DIVIDE ( [Funds Awaiting Control], [Rostered Analysts] )"),
+    dict(table="Dim_Analyst", name="Team Capacity Mins", folder=F_TL, fmt=FN,
+         desc="Rostered analysts in the hour x 60 minutes.",
+         dax="[Rostered Analysts] * 60"),
+    dict(table="Fact_Work", name="Team Load %", folder=F_TL, fmt=FP0,
+         desc="Work in hand / team time available in the hour. Over 100%: more work in hand than the team can do in that "
+              "hour, so it carries over.",
+         dax="DIVIDE ( [Work In Hand Mins], [Team Capacity Mins] )"),
+    dict(table="Fact_Work", name="Team Load Color", folder=F_TL,
+         desc="Conditional formatting (field value) for the load bars: green under 80%, amber 80-100%, red over 100%.",
+         dax="""
+VAR l = [Team Load %]
+RETURN SWITCH ( TRUE (), ISBLANK ( l ), BLANK (), l > 1, "#C8423B", l > 0.8, "#E8A33D", "#2E9E5B" )"""),
 ]
 
 RELATIONSHIPS = [
@@ -455,10 +471,12 @@ VISUALS = [
      "[Pricing Arrived Hr], [Client Cutoff Hr]",
      "The native bar chart has no point markers. For the cut-off/arrival markers use error bars on the matching measure, "
      "or a Deneb visual."),
-    (P2, "Team load by hour", "Line and clustered column chart", "X: Dim_Hour[Hour_Label] (sorted by Hour_Start)",
-     "Columns: [Cutoffs Due In Hour] (red #C8423B), [Funds Awaiting Control] (blue #2F6FB0). Lines: [Rostered Analysts] (grey, dashed), [Analysts Seen Working] (dark, solid)",
-     "Tooltips: [Cutoffs Per Rostered Analyst], [Awaiting Control Per Rostered Analyst]. Put lines on the same Y axis as the columns (turn off the secondary axis) so counts compare directly.",
-     "Whole team for the selected date: ignores the client and fund slicers by design. Edit interactions: set the timeline to None on this chart. Needs Dim_Hour, Dim_Analyst and Status_Log loaded."),
+    (P2, "Team load by hour", "Clustered column chart", "X: Dim_Hour[Hour_Label] (sorted by Hour_Start)",
+     "Y: [Team Load %]. Bar colour: fx, Field value, [Team Load Color]. Data labels on.",
+     "Analytics pane: Y-axis constant line at 1 (= 100%), dashed. Tooltips: [Work In Hand Mins], [Team Capacity Mins], "
+     "[Rostered Analysts], [Cutoffs Due In Hour], [Funds Awaiting Control].",
+     "Whole team for the selected date: ignores the client and fund slicers by design. Edit interactions: timeline to None. "
+     "Needs Dim_Hour and Dim_Analyst loaded."),
     (P2, "Selected fund table", "Table", "Rows: Dim_DetailRow[Detail]", "[Detail Value]",
      "Sort by Detail_Order. Font colour: fx field value [Detail Font Color]. Title: [Selected Fund Title]",
      "Shows values when one fund is selected (click a bar; set the timeline to cross-filter this table)."),
@@ -471,4 +489,5 @@ PQ_NOTE = ("Pre-filled formula rows with no data load as empty rows, and blank f
            "Slack_*_Mins and Check_Mins hold 'n/a' and stay text; do the maths on the *_Num and Bar_* columns.")
 
 # Measures from the first v4.5 cut that the script removes when it finds them.
-OBSOLETE = ["Idle Share of Wait", "Avg Idle Wait"]
+OBSOLETE = ["Idle Share of Wait", "Avg Idle Wait", "Analysts Seen Working", "Cutoffs Per Rostered Analyst",
+            "Awaiting Control Per Rostered Analyst"]

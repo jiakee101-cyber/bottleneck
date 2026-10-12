@@ -357,7 +357,7 @@ RETURN
             )
         ) + 0
     )");
-AddMeasure(@"Status_Log", @"Analysts Seen Working", @"2 Fund Level\Team Load", @"#,0", @"Active analysts with any status change in this hour on the selected date.",
+AddMeasure(@"Fact_Work", @"Work In Hand Mins", @"2 Fund Level\Team Load", @"#,0", @"Whole team, selected date: budgeted maker minutes (recon + NAV) still to do on fund-days in hand during this hour. In hand = from pricing arrival, or from recon start if earlier, until the NAV budget is used up.",
     @"VAR h0 = SELECTEDVALUE ( Dim_Hour[Hour_Start] )
 VAR d =
     CALCULATETABLE (
@@ -369,20 +369,35 @@ RETURN
     IF (
         ISBLANK ( h0 ), BLANK (),
         CALCULATE (
-            DISTINCTCOUNT ( Status_Log[Log_Person_Name] ),
-            TREATAS ( d, Status_Log[Log_Process_Date] ),
-            Status_Log[Active_Analyst] = ""Yes"",
-            Status_Log[Log_Hr] = h0
+            SUMX (
+                FILTER (
+                    Fact_Work,
+                    NOT ISBLANK ( Fact_Work[InHand_Hr] )
+                        && NOT ISBLANK ( Fact_Work[NAV_Done_Hr] )
+                        && Fact_Work[InHand_Hr] < h0 + 1
+                        && Fact_Work[NAV_Done_Hr] > h0
+                ),
+                VAR t = MAX ( h0, Fact_Work[InHand_Hr] )
+                VAR s = MAX ( t, Fact_Work[Work_Start_Hr] )
+                RETURN 60 * MAX ( 0, Fact_Work[NAV_Done_Hr] - s )
+            ),
+            REMOVEFILTERS ( Dim_Fund ), REMOVEFILTERS ( Dim_TOP ), REMOVEFILTERS ( Dim_Cause ), REMOVEFILTERS ( Fact_Work ), TREATAS ( d, Fact_Work[Process_Date] )
         ) + 0
     )");
-AddMeasure(@"Fact_Work", @"Cutoffs Per Rostered Analyst", @"2 Fund Level\Team Load", @"0.0", @"Tooltip: client cut-offs due in the hour per rostered analyst.",
-    @"DIVIDE ( [Cutoffs Due In Hour], [Rostered Analysts] )");
-AddMeasure(@"Fact_Work", @"Awaiting Control Per Rostered Analyst", @"2 Fund Level\Team Load", @"0.0", @"Tooltip: fund-days awaiting control in the hour per rostered analyst.",
-    @"DIVIDE ( [Funds Awaiting Control], [Rostered Analysts] )");
+AddMeasure(@"Dim_Analyst", @"Team Capacity Mins", @"2 Fund Level\Team Load", @"#,0", @"Rostered analysts in the hour x 60 minutes.",
+    @"[Rostered Analysts] * 60");
+AddMeasure(@"Fact_Work", @"Team Load %", @"2 Fund Level\Team Load", @"0%", @"Work in hand / team time available in the hour. Over 100%: more work in hand than the team can do in that hour, so it carries over.",
+    @"DIVIDE ( [Work In Hand Mins], [Team Capacity Mins] )");
+AddMeasure(@"Fact_Work", @"Team Load Color", @"2 Fund Level\Team Load", @"", @"Conditional formatting (field value) for the load bars: green under 80%, amber 80-100%, red over 100%.",
+    @"VAR l = [Team Load %]
+RETURN SWITCH ( TRUE (), ISBLANK ( l ), BLANK (), l > 1, ""#C8423B"", l > 0.8, ""#E8A33D"", ""#2E9E5B"" )");
 
 // ---- Measures replaced by the three-way wait split
 { var old = Model.AllMeasures.FirstOrDefault(x => x.Name == @"Idle Share of Wait"); if (old != null) { old.Delete(); log.AppendLine("Removed old measure " + @"Idle Share of Wait"); } }
 { var old = Model.AllMeasures.FirstOrDefault(x => x.Name == @"Avg Idle Wait"); if (old != null) { old.Delete(); log.AppendLine("Removed old measure " + @"Avg Idle Wait"); } }
+{ var old = Model.AllMeasures.FirstOrDefault(x => x.Name == @"Analysts Seen Working"); if (old != null) { old.Delete(); log.AppendLine("Removed old measure " + @"Analysts Seen Working"); } }
+{ var old = Model.AllMeasures.FirstOrDefault(x => x.Name == @"Cutoffs Per Rostered Analyst"); if (old != null) { old.Delete(); log.AppendLine("Removed old measure " + @"Cutoffs Per Rostered Analyst"); } }
+{ var old = Model.AllMeasures.FirstOrDefault(x => x.Name == @"Awaiting Control Per Rostered Analyst"); if (old != null) { old.Delete(); log.AppendLine("Removed old measure " + @"Awaiting Control Per Rostered Analyst"); } }
 
-log.Insert(0, "NAV Bottleneck v4.5: 65 measures processed.\n");
+log.Insert(0, "NAV Bottleneck v4.5: 66 measures processed.\n");
 Info(log.ToString());

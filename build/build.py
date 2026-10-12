@@ -208,6 +208,15 @@ FW3 = [
      "General", 16, "OK = counted in the control workload. Anything else is left out of the chart and counted on Checks."),
 ]
 add_columns(wb["Fact_Work"], "BU", FW3, 301, "v4.5")
+add_columns(wb["Fact_Work"], "BX", [
+    ("InHand_Hr", '=IF($A{r}="","",IF(NOT(ISNUMBER($Z{r})),"",ROUND((IF(ISNUMBER($U{r}),MIN($U{r},$Z{r}),$Z{r})-$B{r})*24,4)))',
+     "0.00", 11, "When the fund-day enters the team's hands: pricing arrival, or recon start if earlier. Hours from midnight of the processing date."),
+    ("Work_Start_Hr", '=IF($A{r}="","",IF(ISNUMBER($Z{r}),ROUND(($Z{r}-$B{r})*24,4),""))', "0.00", 11,
+     "Reconstructed recon start (Implied_Work_Start_DT: Calculated minus recon budget), in hours."),
+    ("NAV_Done_Hr", '=IF($A{r}="","",IF(AND(ISNUMBER($W{r}),ISNUMBER($S{r})),ROUND(($W{r}+$S{r}/1440-$B{r})*24,4),""))', "0.00", 11,
+     "Calculated + NAV budget: when the maker's budgeted work on this fund-day is used up, in hours. "
+     "Work left at time t = NAV_Done_Hr minus the later of t and Work_Start_Hr."),
+], 301, "v4.5")
 add_columns(wb["Status_Log"], "I", [
     ("Log_Hr", '=IF($D{r}="","",IF(ISNUMBER($E{r}),FLOOR(($E{r}-$B{r})*24,1),""))', "0", 8,
      "Hour of the status change, counted from midnight of the processing date (14 = 14:00 to 14:59)."),
@@ -276,7 +285,7 @@ for c in ("B", "C"):
     ws[f"{c}{r0}"].fill = PatternFill("solid", fgColor=NAVY)
 checks = [
     ("Fact_Work rows without v4.5 formulas", '=COUNT(Fact_Work!$A:$A)-(COUNTIF(Fact_Work!$BJ:$BJ,"?*")-1)',
-     "Target 0. Fill Fact_Work BA to BW down to the last data row, together with D to AZ."),
+     "Target 0. Fill Fact_Work BA to BZ down to the last data row, together with D to AZ."),
     ("Fund-days with no client cut-off", '=COUNTIFS(Fact_Work!$A:$A,"<>",Fact_Work!$V:$V,"")',
      "Target 0. The fund's client cut-off is missing (0) in Dim_Fund, so breach is not scored. Exclude, do not guess."),
     ("Wait split does not add up", '=COUNTIF(Fact_Work!$BR:$BR,"<0")',
@@ -297,6 +306,8 @@ checks = [
      "Target 0. No Calculated, no Controlled (or no FA signed off for client sign-off funds), or the end is before the start. Not shown on Team load by hour."),
     ("Client cut-offs outside the chart hours", '=COUNTIFS(Fact_Work!$BI:$BI,"<"&MIN(Dim_Hour!$A:$A))+COUNTIFS(Fact_Work!$BI:$BI,">="&(MAX(Dim_Hour!$A:$A)+1))',
      "Fund-days whose client cut-off falls before or after the hours listed in Dim_Hour. Add rows to Dim_Hour if this is not 0."),
+    ("Fund-days left out of the team load", '=COUNTIFS(Fact_Work!$A:$A,"<>",Fact_Work!$BZ:$BZ,"")',
+     "Target 0. No Calculated time or no NAV budget, so the fund-day's work cannot be placed on the clock."),
     ("Teams with two shifts", '=COUNTIF(Dim_Team!$D:$D,">1")',
      "The rostered line treats every team as one 9-hour shift from Shift_Start. Two-shift teams are understated."),
 ]
@@ -333,13 +344,14 @@ readme = [
      "missing, inventing a breach. It is now blank, and Headroom_After_Pricing_Mins is guarded for it. Checks counts them.", False),
     ("Fix: Checks C8", "Pointed to Constants!B13 (business days); the broker threshold is B14.", False),
     ("Moved from Dim_Signoff", sig_notes[0] + " " + sig_notes[1], False),
-    ("Team load by hour", "Page 2 chart for one processing date, whole team (client and fund filters ignored). Columns: client "
-     "cut-offs due in each hour (Client_Cutoff_Hr), and fund-days awaiting control in that hour: Calculated but not yet "
-     "Controlled, or not yet FA signed off for client sign-off funds (Control_Start_Hr to Control_End_Hr, counted in every "
-     "hour the window touches). Lines: rostered analysts (active, shift start to start + Constants!B18 hours) and analysts "
-     "seen working (active people with any status change in that hour, Status_Log I:J). Rows whose control window is not "
-     "OK are left out and counted on Checks. Dim_Hour lists the hours shown.", False),
-    ("Filling down", "Fact_Work formulas now run D to AZ and BA to BW; Status_Log G to J; Dim_Analyst to Q; Dim_Team to G; Fact_Milestone D to M; Dim_Fund to BK; Dim_TOP to O.", False),
+    ("Team load by hour", "Page 2 chart for one processing date, whole team (client and fund filters ignored): Load % = work "
+     "in hand / team time available, by hour. Work in hand = budgeted maker minutes (recon + NAV, from the weightage) still to "
+     "do on fund-days in hand during the hour; a fund-day is in hand from pricing arrival (or recon start if earlier) until "
+     "Calculated + its NAV budget (Fact_Work BX:BZ). Team time = active analysts on shift (shift start to start + Constants!B18 "
+     "hours) x 60. Over 100% means more work in hand than the team can do in that hour, so it carries over. Check time is not "
+     "budgeted in the template, so it is not in the load. Tooltips keep cut-offs due and funds awaiting control (BU:BW). "
+     "Status_Log I:J are no longer used by the report and can stay or be deleted.", False),
+    ("Filling down", "Fact_Work formulas now run D to AZ and BA to BZ; Status_Log G to J; Dim_Analyst to Q; Dim_Team to G; Fact_Milestone D to M; Dim_Fund to BK; Dim_TOP to O.", False),
     ("Power Query", PQ_NOTE, False),
 ]
 r = 107
@@ -352,7 +364,7 @@ for a, b, is_hdr in readme:
         body(ws[f"B{r}"], b, wrap=True)
     r += 1
 body(ws["B25"], ws["B25"].value + " v4.5 adds 9 derived columns (BC to BK).")
-body(ws["B28"], ws["B28"].value + " v4.5 adds 23 Power BI columns (BA to BW).")
+body(ws["B28"], ws["B28"].value + " v4.5 adds 26 Power BI columns (BA to BZ).")
 ws["B25"].alignment = ws["B28"].alignment = Alignment(wrap_text=True)
 
 # ---------------------------------------------------------------- PBI_Mapping sheet
