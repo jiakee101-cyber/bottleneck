@@ -271,6 +271,20 @@ RETURN
          dax="MIN ( Fact_Work[Arrival_Hr] )"),
     dict(table="Fact_Work", name="Client Cutoff Hr", folder="2 Fund Level\\Timeline", fmt="0.00",
          dax="MIN ( Fact_Work[Client_Cutoff_Hr] )"),
+    dict(table="Fact_Work", name="Custody Cutoff Hr", folder="2 Fund Level\\Timeline", fmt="0.00",
+         desc="Custody cut-off as hours of day (Dim_Fund Q / AE), only for funds with Has_Custody_Process = Yes. Deneb marker.",
+         dax="""
+MINX (
+    FILTER ( Fact_Work, RELATED ( Dim_Fund[Has_Custody_Process] ) = "Yes" ),
+    RELATED ( Dim_Fund[Custody_Cutoff_Hr] )
+)"""),
+    dict(table="Fact_Work", name="Broker Cutoff Hr", folder="2 Fund Level\\Timeline", fmt="0.00",
+         desc="Broker cut-off (Broker_ETA, Dim_Fund S / AG) as hours of day, only for funds with Has_Broker_Process = Yes. Deneb marker.",
+         dax="""
+MINX (
+    FILTER ( Fact_Work, RELATED ( Dim_Fund[Has_Broker_Process] ) = "Yes" ),
+    RELATED ( Dim_Fund[Broker_ETA_Hr] )
+)"""),
 
     # ------------------------------------------------------------------ page 2 selected fund
     dict(table="Fact_Work", name="Selected Fund Title", folder="2 Fund Level\\Selected Fund",

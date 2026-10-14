@@ -269,6 +269,16 @@ AddMeasure(@"Fact_Work", @"Pricing Arrived Hr", @"2 Fund Level\Timeline", @"0.00
     @"MIN ( Fact_Work[Arrival_Hr] )");
 AddMeasure(@"Fact_Work", @"Client Cutoff Hr", @"2 Fund Level\Timeline", @"0.00", @"",
     @"MIN ( Fact_Work[Client_Cutoff_Hr] )");
+AddMeasure(@"Fact_Work", @"Custody Cutoff Hr", @"2 Fund Level\Timeline", @"0.00", @"Custody cut-off as hours of day (Dim_Fund Q / AE), only for funds with Has_Custody_Process = Yes. Deneb marker.",
+    @"MINX (
+    FILTER ( Fact_Work, RELATED ( Dim_Fund[Has_Custody_Process] ) = ""Yes"" ),
+    RELATED ( Dim_Fund[Custody_Cutoff_Hr] )
+)");
+AddMeasure(@"Fact_Work", @"Broker Cutoff Hr", @"2 Fund Level\Timeline", @"0.00", @"Broker cut-off (Broker_ETA, Dim_Fund S / AG) as hours of day, only for funds with Has_Broker_Process = Yes. Deneb marker.",
+    @"MINX (
+    FILTER ( Fact_Work, RELATED ( Dim_Fund[Has_Broker_Process] ) = ""Yes"" ),
+    RELATED ( Dim_Fund[Broker_ETA_Hr] )
+)");
 AddMeasure(@"Fact_Work", @"Selected Fund Title", @"2 Fund Level\Selected Fund", @"", @"",
     @"""Selected fund — "" & IF ( HASONEVALUE ( Fact_Work[Fund_ID] ), VALUES ( Fact_Work[Fund_ID] ), ""select one"" )");
 AddMeasure(@"Fact_Work", @"Detail Value", @"2 Fund Level\Selected Fund", @"", @"Value column of the selected-fund table (rows from Dim_DetailRow).",
@@ -452,5 +462,5 @@ AddMeasure(@"Fact_Work", @"Work Outside Shift Mins", @"2 Fund Level\Team Load", 
 { var old = Model.AllMeasures.FirstOrDefault(x => x.Name == @"Cutoffs Per Rostered Analyst"); if (old != null) { old.Delete(); log.AppendLine("Removed old measure " + @"Cutoffs Per Rostered Analyst"); } }
 { var old = Model.AllMeasures.FirstOrDefault(x => x.Name == @"Awaiting Control Per Rostered Analyst"); if (old != null) { old.Delete(); log.AppendLine("Removed old measure " + @"Awaiting Control Per Rostered Analyst"); } }
 
-log.Insert(0, "NAV Bottleneck v4.5: 68 measures processed.\n");
+log.Insert(0, "NAV Bottleneck v4.5: 70 measures processed.\n");
 Info(log.ToString());

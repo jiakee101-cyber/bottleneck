@@ -1,6 +1,6 @@
 {
   "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
-  "description": "NAV timeline by fund (page 2). Deneb / Vega-Lite. Values well: Fact_Work[Fund_Label], Fact_Work[Client_Name] + the 9 measures in folder 2 Fund Level\\Timeline. Second legend (shape) explains the markers: hollow diamond = pricing cut-off, filled diamond = pricing arrived, red line = client cut-off.",
+  "description": "NAV timeline by fund (page 2). Deneb / Vega-Lite. Values well: Fact_Work[Fund_Label], Fact_Work[Client_Name] + the 11 measures (incl. Custody Cutoff Hr, Broker Cutoff Hr) in folder 2 Fund Level\\Timeline. Second legend (shape) explains the markers: hollow diamond = pricing cut-off, filled diamond = pricing arrived, red line = client cut-off.",
   "data": {
     "name": "dataset"
   },
@@ -76,6 +76,14 @@
     {
       "calculate": "isValid(datum['Client Cutoff Hr']) ? round((datum['Client Cutoff Hr'] - datum.e4) * 60) + ' min' : '–'",
       "as": "Headroom"
+    },
+    {
+      "calculate": "isValid(datum['Custody Cutoff Hr']) ? floor(datum['Custody Cutoff Hr']) + ':' + pad(round((datum['Custody Cutoff Hr'] % 1) * 60), 2, '0', 'left') : 'n/a'",
+      "as": "Custody cut-off"
+    },
+    {
+      "calculate": "isValid(datum['Broker Cutoff Hr']) ? floor(datum['Broker Cutoff Hr']) + ':' + pad(round((datum['Broker Cutoff Hr'] % 1) * 60), 2, '0', 'left') : 'n/a'",
+      "as": "Broker cut-off"
     }
   ],
   "encoding": {
@@ -109,6 +117,12 @@
       {
         "field": "Client_Name",
         "title": "Client"
+      },
+      {
+        "field": "Custody cut-off"
+      },
+      {
+        "field": "Broker cut-off"
       },
       {
         "field": "Pricing cut-off"
@@ -148,25 +162,13 @@
           "type": "quantitative",
           "title": null,
           "scale": {
-            "domain": [
-              9,
-              17
-            ],
-            "nice": false
+            "zero": false,
+            "nice": false,
+            "padding": 12
           },
           "axis": {
-            "values": [
-              9,
-              10,
-              11,
-              12,
-              13,
-              14,
-              15,
-              16,
-              17
-            ],
-            "labelExpr": "datum.value + ':00'",
+            "tickMinStep": 1,
+            "labelExpr": "floor(datum.value) + ':00'",
             "grid": true
           }
         },
@@ -273,10 +275,12 @@
       }
     },
     {
-      "description": "Pricing cut-off (hollow diamond) and pricing arrived (filled diamond), one layer so the legend merges.",
+      "description": "Custody cut-off (hollow blue square), broker cut-off (hollow purple triangle), pricing cut-off (hollow diamond), pricing arrived (filled diamond): one layer so the legend merges.",
       "transform": [
         {
           "fold": [
+            "Custody Cutoff Hr",
+            "Broker Cutoff Hr",
             "Pricing Cutoff Hr",
             "Pricing Arrived Hr"
           ],
@@ -286,7 +290,7 @@
           ]
         },
         {
-          "calculate": "datum.mk === 'Pricing Cutoff Hr' ? 'Pricing cut-off' : 'Pricing arrived'",
+          "calculate": "datum.mk === 'Custody Cutoff Hr' ? 'Custody cut-off' : datum.mk === 'Broker Cutoff Hr' ? 'Broker cut-off' : datum.mk === 'Pricing Cutoff Hr' ? 'Pricing cut-off' : 'Pricing arrived'",
           "as": "Marker"
         }
       ],
@@ -307,11 +311,15 @@
           "type": "nominal",
           "scale": {
             "domain": [
+              "Custody cut-off",
+              "Broker cut-off",
               "Pricing cut-off",
               "Pricing arrived",
               "Client cut-off"
             ],
             "range": [
+              "square",
+              "triangle-up",
               "diamond",
               "diamond",
               "M0,-1L0,1"
@@ -329,11 +337,15 @@
           "type": "nominal",
           "scale": {
             "domain": [
+              "Custody cut-off",
+              "Broker cut-off",
               "Pricing cut-off",
               "Pricing arrived",
               "Client cut-off"
             ],
             "range": [
+              "#FFFFFF",
+              "#FFFFFF",
               "#FFFFFF",
               "#1F2933",
               "#C8423B"
@@ -351,11 +363,15 @@
           "type": "nominal",
           "scale": {
             "domain": [
+              "Custody cut-off",
+              "Broker cut-off",
               "Pricing cut-off",
               "Pricing arrived",
               "Client cut-off"
             ],
             "range": [
+              "#2F6FB0",
+              "#7B5EA7",
               "#5B6573",
               "#1F2933",
               "#C8423B"
