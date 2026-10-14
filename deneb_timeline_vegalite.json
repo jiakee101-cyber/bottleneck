@@ -277,31 +277,14 @@
       }
     },
     {
-      "description": "Client cut-off: red vertical tick. A bar crossing it is a breach.",
-      "mark": {
-        "type": "tick",
-        "orient": "vertical",
-        "color": "#C8423B",
-        "thickness": 2,
-        "bandSize": 18,
-        "clip": true
-      },
-      "encoding": {
-        "x": {
-          "field": "Client Cutoff Hr",
-          "type": "quantitative"
-        }
-      }
-    },
-    {
-      "description": "Custody cut-off (hollow blue square), broker cut-off (hollow purple triangle), pricing cut-off (hollow diamond), pricing arrived (filled diamond): one layer so the legend merges.",
+      "description": "Cut-offs as short vertical lines: custody teal, broker magenta, pricing dark grey, client red (a bar crossing the red line is a breach).",
       "transform": [
         {
           "fold": [
             "Custody Cutoff Hr",
             "Broker Cutoff Hr",
             "Pricing Cutoff Hr",
-            "Pricing Arrived Hr"
+            "Client Cutoff Hr"
           ],
           "as": [
             "mk",
@@ -309,15 +292,15 @@
           ]
         },
         {
-          "calculate": "datum.mk === 'Custody Cutoff Hr' ? 'Custody cut-off' : datum.mk === 'Broker Cutoff Hr' ? 'Broker cut-off' : datum.mk === 'Pricing Cutoff Hr' ? 'Pricing cut-off' : 'Pricing arrived'",
+          "calculate": "datum.mk === 'Custody Cutoff Hr' ? 'Custody cut-off' : datum.mk === 'Broker Cutoff Hr' ? 'Broker cut-off' : datum.mk === 'Pricing Cutoff Hr' ? 'Pricing cut-off' : 'Client cut-off'",
           "as": "Marker"
         }
       ],
       "mark": {
         "type": "point",
         "filled": true,
-        "size": 70,
-        "strokeWidth": 1.5,
+        "strokeWidth": 2.5,
+        "size": 420,
         "clip": true
       },
       "encoding": {
@@ -333,22 +316,23 @@
               "Custody cut-off",
               "Broker cut-off",
               "Pricing cut-off",
-              "Pricing arrived",
-              "Client cut-off"
+              "Client cut-off",
+              "Pricing arrived"
             ],
             "range": [
-              "square",
-              "triangle-up",
-              "diamond",
-              "diamond",
-              "M0,-1L0,1"
+              "M0,-1L0,1",
+              "M0,-1L0,1",
+              "M0,-1L0,1",
+              "M0,-1L0,1",
+              "diamond"
             ]
           },
           "legend": {
             "title": null,
             "orient": "bottom",
-            "symbolSize": 90,
-            "symbolStrokeWidth": 1.8
+            "symbolSize": 110,
+            "symbolStrokeWidth": 2.5,
+            "labelOffset": 4
           }
         },
         "fill": {
@@ -359,22 +343,23 @@
               "Custody cut-off",
               "Broker cut-off",
               "Pricing cut-off",
-              "Pricing arrived",
-              "Client cut-off"
+              "Client cut-off",
+              "Pricing arrived"
             ],
             "range": [
-              "#FFFFFF",
-              "#FFFFFF",
-              "#FFFFFF",
-              "#1F2933",
-              "#C8423B"
+              "transparent",
+              "transparent",
+              "transparent",
+              "transparent",
+              "#1F2933"
             ]
           },
           "legend": {
             "title": null,
             "orient": "bottom",
-            "symbolSize": 90,
-            "symbolStrokeWidth": 1.8
+            "symbolSize": 110,
+            "symbolStrokeWidth": 2.5,
+            "labelOffset": 4
           }
         },
         "stroke": {
@@ -385,22 +370,129 @@
               "Custody cut-off",
               "Broker cut-off",
               "Pricing cut-off",
-              "Pricing arrived",
-              "Client cut-off"
+              "Client cut-off",
+              "Pricing arrived"
             ],
             "range": [
-              "#2F6FB0",
-              "#7B5EA7",
+              "#1B9AAA",
+              "#B0478F",
               "#5B6573",
-              "#1F2933",
-              "#C8423B"
+              "#C8423B",
+              "#1F2933"
             ]
           },
           "legend": {
             "title": null,
             "orient": "bottom",
-            "symbolSize": 90,
-            "symbolStrokeWidth": 1.8
+            "symbolSize": 110,
+            "symbolStrokeWidth": 2.5,
+            "labelOffset": 4
+          }
+        }
+      }
+    },
+    {
+      "description": "Pricing arrived: filled dark diamond (same legend as the cut-off lines).",
+      "transform": [
+        {
+          "filter": "isValid(datum['Pricing Arrived Hr'])"
+        },
+        {
+          "calculate": "'Pricing arrived'",
+          "as": "Marker"
+        }
+      ],
+      "mark": {
+        "type": "point",
+        "filled": true,
+        "strokeWidth": 1,
+        "size": 70,
+        "clip": true
+      },
+      "encoding": {
+        "x": {
+          "field": "Pricing Arrived Hr",
+          "type": "quantitative"
+        },
+        "shape": {
+          "field": "Marker",
+          "type": "nominal",
+          "scale": {
+            "domain": [
+              "Custody cut-off",
+              "Broker cut-off",
+              "Pricing cut-off",
+              "Client cut-off",
+              "Pricing arrived"
+            ],
+            "range": [
+              "M0,-1L0,1",
+              "M0,-1L0,1",
+              "M0,-1L0,1",
+              "M0,-1L0,1",
+              "diamond"
+            ]
+          },
+          "legend": {
+            "title": null,
+            "orient": "bottom",
+            "symbolSize": 110,
+            "symbolStrokeWidth": 2.5,
+            "labelOffset": 4
+          }
+        },
+        "fill": {
+          "field": "Marker",
+          "type": "nominal",
+          "scale": {
+            "domain": [
+              "Custody cut-off",
+              "Broker cut-off",
+              "Pricing cut-off",
+              "Client cut-off",
+              "Pricing arrived"
+            ],
+            "range": [
+              "transparent",
+              "transparent",
+              "transparent",
+              "transparent",
+              "#1F2933"
+            ]
+          },
+          "legend": {
+            "title": null,
+            "orient": "bottom",
+            "symbolSize": 110,
+            "symbolStrokeWidth": 2.5,
+            "labelOffset": 4
+          }
+        },
+        "stroke": {
+          "field": "Marker",
+          "type": "nominal",
+          "scale": {
+            "domain": [
+              "Custody cut-off",
+              "Broker cut-off",
+              "Pricing cut-off",
+              "Client cut-off",
+              "Pricing arrived"
+            ],
+            "range": [
+              "#1B9AAA",
+              "#B0478F",
+              "#5B6573",
+              "#C8423B",
+              "#1F2933"
+            ]
+          },
+          "legend": {
+            "title": null,
+            "orient": "bottom",
+            "symbolSize": 110,
+            "symbolStrokeWidth": 2.5,
+            "labelOffset": 4
           }
         }
       }
