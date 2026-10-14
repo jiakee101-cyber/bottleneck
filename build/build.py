@@ -213,8 +213,10 @@ add_columns(wb["Fact_Work"], "BX", [
      "0.00", 11, "When the fund-day enters the team's hands: pricing arrival, or recon start if earlier. Hours from midnight of the processing date."),
     ("Work_Start_Hr", '=IF($A{r}="","",IF(ISNUMBER($Z{r}),ROUND(($Z{r}-$B{r})*24,4),""))', "0.00", 11,
      "Reconstructed recon start (Implied_Work_Start_DT: Calculated minus recon budget), in hours."),
-    ("NAV_Done_Hr", '=IF($A{r}="","",IF(AND(ISNUMBER($W{r}),ISNUMBER($S{r})),ROUND(($W{r}+$S{r}/1440-$B{r})*24,4),""))', "0.00", 11,
-     "Calculated + NAV budget: when the maker's budgeted work on this fund-day is used up, in hours. "
+    ("NAV_Done_Hr", '=IF($A{r}="","",IF(AND(ISNUMBER($W{r}),ISNUMBER($S{r})),ROUND((IF(ISNUMBER($X{r}),MIN($W{r}+$S{r}/1440,MAX($X{r},$W{r})),$W{r}+$S{r}/1440)-$B{r})*24,4),""))', "0.00", 11,
+     "When the maker's work on this fund-day is done, in hours: the earlier of Calculated + NAV budget and the actual "
+     "NAV end (Controlled, or FA signed off for client sign-off funds). Calculated = NAV started, Controlled = finished, "
+     "so work cannot run past Controlled; time after the budget is waiting for the checker. "
      "Work left at time t = NAV_Done_Hr minus the later of t and Work_Start_Hr."),
 ], 301, "v4.5")
 add_columns(wb["Status_Log"], "I", [
@@ -347,7 +349,7 @@ readme = [
     ("Team load by hour", "Page 2 chart for one processing date, whole team (client and fund filters ignored): Load % = work "
      "in hand / team time available, by hour. Work in hand = budgeted maker minutes (recon + NAV, from the weightage) still to "
      "do on fund-days in hand during the hour; a fund-day is in hand from pricing arrival (or recon start if earlier) until "
-     "Calculated + its NAV budget (Fact_Work BX:BZ). Team time = makers of that date (active analysts who set at least one fund "
+     "Calculated + its NAV budget, or the actual Controlled time if that is earlier (Fact_Work BX:BZ; Calculated = NAV started, Controlled = finished). Team time = makers of that date (active analysts who set at least one fund "
      "to Calculated) on shift in the hour (shift start to start + Constants!B18 hours), at the 450 basis: minutes on shift "
      "x Daily_Capacity_Mins / shift minutes, i.e. 50 per full hour on a 9-hour shift, prorated for part-hours. Makers who did "
      "no Calculated that day are not counted. Over 100% means more work in hand than the team can do in that hour, so it carries over. The chart shows work in hand (columns) against capacity (line), both in minutes, so hours with work but no maker on shift stay visible (dark purple, label 'after shift'); Work Outside Shift Mins totals them. Check time is not "

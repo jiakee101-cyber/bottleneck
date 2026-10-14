@@ -378,7 +378,7 @@ RETURN
     )"""),
     dict(table="Fact_Work", name="Work In Hand Mins", folder=F_TL, fmt=FN,
          desc="Whole team, selected date: budgeted maker minutes (recon + NAV) still to do on fund-days in hand during "
-              "this hour. In hand = from pricing arrival, or from recon start if earlier, until the NAV budget is used up.",
+              "this hour. In hand = from pricing arrival, or from recon start if earlier, until Calculated + NAV budget or Controlled, whichever is earlier.",
          dax=f"""
 {TEAM_DATES}
 RETURN

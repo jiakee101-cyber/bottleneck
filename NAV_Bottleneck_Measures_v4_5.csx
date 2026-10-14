@@ -364,7 +364,7 @@ RETURN
             )
         ) + 0
     )");
-AddMeasure(@"Fact_Work", @"Work In Hand Mins", @"2 Fund Level\Team Load", @"#,0", @"Whole team, selected date: budgeted maker minutes (recon + NAV) still to do on fund-days in hand during this hour. In hand = from pricing arrival, or from recon start if earlier, until the NAV budget is used up.",
+AddMeasure(@"Fact_Work", @"Work In Hand Mins", @"2 Fund Level\Team Load", @"#,0", @"Whole team, selected date: budgeted maker minutes (recon + NAV) still to do on fund-days in hand during this hour. In hand = from pricing arrival, or from recon start if earlier, until Calculated + NAV budget or Controlled, whichever is earlier.",
     @"VAR h0 = SELECTEDVALUE ( Dim_Hour[Hour_Start] )
 VAR d =
     CALCULATETABLE (
