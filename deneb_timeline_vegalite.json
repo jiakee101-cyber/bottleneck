@@ -162,13 +162,32 @@
           "type": "quantitative",
           "title": null,
           "scale": {
-            "zero": false,
+            "domain": [
+              2,
+              16
+            ],
             "nice": false,
-            "padding": 12
+            "zero": false
           },
           "axis": {
-            "tickMinStep": 1,
-            "labelExpr": "floor(datum.value) + ':00'",
+            "values": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16
+            ],
+            "labelExpr": "datum.value + ':00'",
             "grid": true
           }
         },
