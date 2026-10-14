@@ -1,6 +1,6 @@
 {
   "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
-  "description": "NAV timeline by fund (page 2). Deneb / Vega-Lite. Values well: Fact_Work[Fund_Label] + the 9 measures in folder 2 Fund Level\\Timeline. Second legend (shape) explains the markers: hollow diamond = pricing cut-off, filled diamond = pricing arrived, red line = client cut-off.",
+  "description": "NAV timeline by fund (page 2). Deneb / Vega-Lite. Values well: Fact_Work[Fund_Label], Fact_Work[Client_Name] + the 9 measures in folder 2 Fund Level\\Timeline. Second legend (shape) explains the markers: hollow diamond = pricing cut-off, filled diamond = pricing arrived, red line = client cut-off.",
   "data": {
     "name": "dataset"
   },
@@ -105,6 +105,10 @@
       {
         "field": "Fund_Label",
         "title": "Fund"
+      },
+      {
+        "field": "Client_Name",
+        "title": "Client"
       },
       {
         "field": "Pricing cut-off"
