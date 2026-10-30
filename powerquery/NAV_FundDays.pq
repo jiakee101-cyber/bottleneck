@@ -34,7 +34,7 @@ let
                 Status_FA_SignedOff_DT = List.Max(List.RemoveNulls(Table.SelectRows(g, each [Status_Key] = sFA)[Log_Timestamp])),
                 Status_SignedOff_DT = List.Max(List.RemoveNulls(Table.SelectRows(g, each [Status_Key] = sSO)[Log_Timestamp])),
                 Recalc_Count = Recalcs,
-                Rework_Gap_Mins = if Recalcs <= 1 then 0 else fx.R0(fx.Mins(CalcMax, CalcMin)),
+                Rework_Gap_Mins = if Recalcs <= 1 then 0 else fx[R0](fx[Mins](CalcMax, CalcMin)),
                 Maker_Name = PersonAt(Calc, CalcMax),
                 Checker_Found = PersonAt(Ctrl, CtrlMax)
             ],
@@ -43,24 +43,24 @@ let
         "Status_FA_SignedOff_DT", "Status_SignedOff_DT", "Recalc_Count", "Rework_Gap_Mins", "Maker_Name", "Checker_Found"}),
     Renamed = Table.RenameColumns(Expanded, {{"Log_NAV_Date", "NAV_Date"}, {"Log_Process_Date", "Process_Date"}}),
     Sorted = Table.Sort(Renamed, {{"Process_Date", Order.Ascending}, {"NAV_Date", Order.Ascending}, {"Fund_Key", Order.Ascending}}),
-    Funds = fx.LookupOf(Dim_Fund[Fund_ID], Table.ToRecords(Dim_Fund)),
+    Funds = fx[LookupOf](Dim_Fund[Fund_ID], Table.ToRecords(Dim_Fund)),
     // Latest pricing arrival per process date + TOP (MAXIFS on Fact_Milestone).
     Ms = Table.Group(
-        Table.AddColumn(NAV_MilestoneRaw, "K", each Date.ToText([Process_Date], "yyyy-MM-dd") & "|" & (if fx.Key([TOP_ID]) = null then "" else fx.Key([TOP_ID])), type text),
+        Table.AddColumn(NAV_MilestoneRaw, "K", each Date.ToText([Process_Date], "yyyy-MM-dd") & "|" & (if fx[Key]([TOP_ID]) = null then "" else fx[Key]([TOP_ID])), type text),
         {"K"}, {{"Arrival", each List.Max(List.RemoveNulls([Actual_Arrival_DT])), type nullable datetime}}),
     Arrivals = Record.FromList(Ms[Arrival], Ms[K]),
     WithDims = Table.AddColumn(Sorted, "D", (r) =>
         let
-            F = fx.Find(Funds, r[Fund_ID]),
+            F = fx[Find](Funds, r[Fund_ID]),
             Get = (name as text) as any => if F = null then null else Record.Field(F, name),
             Top = Get("TOP_ID"),
             ClientHr = Get("Client_Cutoff_Hr"),
             PriceHr = Get("Pricing_Cutoff_Hr"),
-            ArrKey = if fx.Key(Top) = null then null else Date.ToText(r[Process_Date], "yyyy-MM-dd") & "|" & fx.Key(Top),
+            ArrKey = if fx[Key](Top) = null then null else Date.ToText(r[Process_Date], "yyyy-MM-dd") & "|" & fx[Key](Top),
             U = if ArrKey = null then null else Record.FieldOrDefault(Arrivals, ArrKey, null),
-            V = if ClientHr <> null and ClientHr > 0 then fx.AtHr(r[Process_Date], ClientHr) else null,
+            V = if ClientHr <> null and ClientHr > 0 then fx[AtHr](r[Process_Date], ClientHr) else null,
             Y = r[Status_SignedOff_DT],
-            AH = fx.R0(fx.Mins(Y, V))
+            AH = fx[R0](fx[Mins](Y, V))
         in
             [
                 Signoff_Model = Get("Signoff_Model"),

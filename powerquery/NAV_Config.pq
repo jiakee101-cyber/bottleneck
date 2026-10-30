@@ -2,14 +2,14 @@
 // "Minutes per weightage unit" is worked out here (capacity / FTE denominator) rather than read from the sheet.
 let
     fx = fxNAV,
-    Raw = fx.Sheet("Constants"),
-    Rows = Table.SelectRows(Raw, each not fx.IsBlank([CONSTANT])),
+    Raw = fx[Sheet]("Constants"),
+    Rows = Table.SelectRows(Raw, each not fx[IsBlank]([CONSTANT])),
     Get = (label as text) as number =>
         let
             Hit = Table.SelectRows(Rows, each Text.Lower(Text.Trim(Text.From([CONSTANT]))) = Text.Lower(label)),
             Value = if Table.RowCount(Hit) = 0
                 then error Error.Record("NAV inputs", "Constants row '" & label & "' was not found")
-                else fx.Num(Hit{0}[VALUE])
+                else fx[Num](Hit{0}[VALUE])
         in
             if Value = null then error Error.Record("NAV inputs", "Constants row '" & label & "' has no number") else Value,
     FTE = Get("FTE denominator"),

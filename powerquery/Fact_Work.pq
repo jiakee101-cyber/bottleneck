@@ -3,17 +3,17 @@
 let
     fx = fxNAV,
     Base = NAV_FundDays,
-    Analysts = let t = NAV_Inputs[Analyst] in fx.LookupOf(t[Analyst_Name], List.Repeat({true}, Table.RowCount(t))),
-    TopEarliest = fx.LookupOf(Dim_TOP[TOP_ID], Dim_TOP[Earliest_Cutoff_Hr]),
+    Analysts = let t = NAV_Inputs[Analyst] in fx[LookupOf](t[Analyst_Name], List.Repeat({true}, Table.RowCount(t))),
+    TopEarliest = fx[LookupOf](Dim_TOP[TOP_ID], Dim_TOP[Earliest_Cutoff_Hr]),
     TopDaysT = NAV_TopDays,
     TopDays = Record.FromList(Table.ToRecords(TopDaysT), TopDaysT[K]),
     // Latest arrival per process date + TOP, and whether any arrival row exists (for TOP_SLA_Met and Due_Slot_Hr).
     MsGroups = Table.Group(
-        Table.AddColumn(NAV_MilestoneRaw, "K", each Date.ToText([Process_Date], "yyyy-MM-dd") & "|" & (if fx.Key([TOP_ID]) = null then "" else fx.Key([TOP_ID])), type text),
+        Table.AddColumn(NAV_MilestoneRaw, "K", each Date.ToText([Process_Date], "yyyy-MM-dd") & "|" & (if fx[Key]([TOP_ID]) = null then "" else fx[Key]([TOP_ID])), type text),
         {"K"}, {{"MaxArrival", each List.Max(List.RemoveNulls([Actual_Arrival_DT])), type nullable datetime},
                 {"Rows", each Table.RowCount(_), Int64.Type}}),
     Ms = Record.FromList(Table.ToRecords(MsGroups), MsGroups[K]),
-    IsClient = (v as any) as logical => fx.Same(v, "Client"),
+    IsClient = (v as any) as logical => fx[Same](v, "Client"),
     // Step 1: every column that does not compare a fund-day with the maker's other fund-days.
     Step1 = Table.AddColumn(Base, "C1", (r) =>
         let
@@ -30,54 +30,54 @@ let
             W = F,
             X = if Client then H else G,
             Y = I,
-            Z = if W = null or R = null then null else fx.AddMins(W, -R),
-            AA = if U = null or V = null then null else fx.R0(fx.Mins(V, U)),
-            AB = if U = null then null else fx.R0(fx.Mins(W, U)),
+            Z = if W = null or R = null then null else fx[AddMins](W, -R),
+            AA = if U = null or V = null then null else fx[R0](fx[Mins](V, U)),
+            AB = if U = null then null else fx[R0](fx[Mins](W, U)),
             AC = if AB = null then null else List.Max({0, AB}),
-            AD = fx.R0(fx.Mins(X, W)),
-            AEnum = if Client then null else fx.R0(fx.Mins(H, G)),
+            AD = fx[R0](fx[Mins](X, W)),
+            AEnum = if Client then null else fx[R0](fx[Mins](H, G)),
             AE = if Client then "n/a" else if AEnum = null then null else Text.From(AEnum),
-            AF = fx.R0(fx.Mins(Y, H)),
-            AG = fx.R0(fx.Mins(H, F)),
+            AF = fx[R0](fx[Mins](Y, H)),
+            AG = fx[R0](fx[Mins](H, F)),
             AH = r[Breach_Mins],
             AI = r[Breached],
             AL = r[TOP_ID],
             AN = r[Fund_Pricing_Cutoff_Hr],
-            AM = if U = null then null else if U > fx.AtHr(B, r[Pricing_Late_Hr]) then "Yes" else "No",
-            DayKey = if fx.Key(AL) = null then null else Date.ToText(B, "yyyy-MM-dd") & "|" & fx.Key(AL),
+            AM = if U = null then null else if U > fx[AtHr](B, r[Pricing_Late_Hr]) then "Yes" else "No",
+            DayKey = if fx[Key](AL) = null then null else Date.ToText(B, "yyyy-MM-dd") & "|" & fx[Key](AL),
             Day = if DayKey = null then null else Record.FieldOrDefault(TopDays, DayKey, null),
             MsDay = if DayKey = null then null else Record.FieldOrDefault(Ms, DayKey, null),
             Binding = if Day = null then null else Day[Binding_Cutoff_Hr],
-            SlotBase = if MsDay <> null and Binding <> null then Binding else fx.Find(TopEarliest, AL),
-            AO = if AL = null then null else fx.Floor(SlotBase, 0.5),
+            SlotBase = if MsDay <> null and Binding <> null then Binding else fx[Find](TopEarliest, AL),
+            AO = if AL = null then null else fx[Floor](SlotBase, 0.5),
             Late = if MsDay = null or Binding = null or MsDay[MaxArrival] = null then null
-                else fx.R0(fx.Mins(MsDay[MaxArrival], fx.AtHr(B, Binding))),
+                else fx[R0](fx[Mins](MsDay[MaxArrival], fx[AtHr](B, Binding))),
             BB = if AL = null or Late = null then null else if Late > 0 then "No" else "Yes",
-            AP = if U = null then null else fx.R(fx.HrOfDay(U), 4),
-            AQ = if W = null then null else fx.R(fx.HrOfDay(W), 4),
-            AR = if X = null then null else fx.R(fx.HrOfDay(X), 4),
-            AS = if AN = null or V = null or S = null or T = null then null else fx.R0(fx.Mins(V, fx.AtHr(B, AN)) - S - T),
-            AT = if AN = null or U = null then null else fx.R0(fx.Mins(U, fx.AtHr(B, AN))),
-            AU = if AD = null or S = null then null else fx.R0(AD - S),
+            AP = if U = null then null else fx[R](fx[HrOfDay](U), 4),
+            AQ = if W = null then null else fx[R](fx[HrOfDay](W), 4),
+            AR = if X = null then null else fx[R](fx[HrOfDay](X), 4),
+            AS = if AN = null or V = null or S = null or T = null then null else fx[R0](fx[Mins](V, fx[AtHr](B, AN)) - S - T),
+            AT = if AN = null or U = null then null else fx[R0](fx[Mins](U, fx[AtHr](B, AN))),
+            AU = if AD = null or S = null then null else fx[R0](AD - S),
             AV = if AEnum = null then 0 else AEnum,
             AW = if AF = null or T = null then null else AF - T,
-            AX = if List.Count(List.RemoveNulls({AT, AB, AU, AW, AS, AH})) < 6 then null else fx.R0(AT + AB + AU + AV + AW - AS - AH),
+            AX = if List.Count(List.RemoveNulls({AT, AB, AU, AW, AS, AH})) < 6 then null else fx[R0](AT + AB + AU + AV + AW - AS - AH),
             BM = if AQ = null then null else if AP = null then AQ else List.Min({AP, AQ}),
             Done = if W = null or S = null then null
-                else let Budget = fx.AddMins(W, S) in if X = null then Budget else List.Min({Budget, List.Max({X, W})})
+                else let Budget = fx[AddMins](W, S) in if X = null then Budget else List.Min({Budget, List.Max({X, W})})
         in
             [
                 Processing_Lag_Days = Duration.Days(B - r[NAV_Date]),
                 Checker_Name = M,
-                Reassigned = if fx.Same(L, N) then "No" else "Yes",
-                Self_Checked = if Client then "n/a" else if fx.Same(L, M) then "YES — four-eyes breach" else "No",
+                Reassigned = if fx[Same](L, N) then "No" else "Yes",
+                Self_Checked = if Client then "n/a" else if fx[Same](L, M) then "YES — four-eyes breach" else "No",
                 NAV_Start_DT = W, NAV_End_DT = X, Delivered_DT = Y, Implied_Work_Start_DT = Z,
                 Headroom_After_Pricing_Mins = AA, Pricing_To_Calc_Mins = AB, Wait_After_Pricing_Mins = AC,
                 NAV_Span_Mins = AD, Check_Mins = AE, External_Tail_Mins = AF, FA_Total_Mins = AG,
                 Primary_Cause = if AI <> "Yes" then "On time"
-                    else if fx.N(AC) >= List.Max({fx.N(AF), fx.N(K)}) then "Wait for analyst"
-                    else if fx.N(AF) >= fx.N(K) then "External sign-off" else "Rework",
-                Row_Quality = if F = null or Y = null or fx.Find(Analysts, L) = null then "CHECK" else "OK",
+                    else if fx[N](AC) >= List.Max({fx[N](AF), fx[N](K)}) then "Wait for analyst"
+                    else if fx[N](AF) >= fx[N](K) then "External sign-off" else "Rework",
+                Row_Quality = if F = null or Y = null or fx[Find](Analysts, L) = null then "CHECK" else "OK",
                 Pricing_Late_For_This_Fund = AM,
                 Due_Slot_Hr = AO,
                 Arrival_Hr = AP, Start_Hr = AQ, End_Hr = AR,
@@ -93,23 +93,23 @@ let
                     else if r[Custody_Slack_Group] = "Thin custody slack" then "Thin custody slack"
                     else if r[Broker_Dependent] = "Yes" then "Broker-dependent" else "None of these",
                 Fund_Label = r[Fund_ID] & (if Client then "*" else ""),
-                Controlled_To_Delivered_Mins = fx.R0(fx.Mins(Y, X)),
+                Controlled_To_Delivered_Mins = fx[R0](fx[Mins](Y, X)),
                 Headroom_At_Delivery_Mins = if AH = null then null else -AH,
                 Bar_Offset_Hr = BM,
-                Bar_Wait_Hr = if BM = null then null else fx.R(fx.N(AC) / 60, 4),
-                Bar_NAV_Hr = if BM = null or AD = null then null else fx.R(AD / 60, 4),
-                Bar_Control_Hr = if BM = null then null else fx.R(AV / 60, 4),
-                Bar_Tail_Hr = if BM = null or AF = null then null else fx.R(AF / 60, 4),
+                Bar_Wait_Hr = if BM = null then null else fx[R](fx[N](AC) / 60, 4),
+                Bar_NAV_Hr = if BM = null or AD = null then null else fx[R](AD / 60, 4),
+                Bar_Control_Hr = if BM = null then null else fx[R](AV / 60, 4),
+                Bar_Tail_Hr = if BM = null or AF = null then null else fx[R](AF / 60, 4),
                 Work_Start_Num = if Z <> null and W <> null then Number.From(Z) else 0,
                 Work_End_Num = if W <> null then Number.From(W) else 0,
-                Control_Start_Hr = if W = null then null else fx.R(fx.HrsFrom(W, B), 4),
-                Control_End_Hr = if X = null then null else fx.R(fx.HrsFrom(X, B), 4),
+                Control_Start_Hr = if W = null then null else fx[R](fx[HrsFrom](W, B), 4),
+                Control_End_Hr = if X = null then null else fx[R](fx[HrsFrom](X, B), 4),
                 Control_Window_Status = if W = null then "Missing Calculated"
                     else if X = null then (if Client then "Missing FA signed off" else "Missing Controlled")
                     else if X < W then "End before start" else "OK",
-                InHand_Hr = if Z = null then null else fx.R(fx.HrsFrom(if U <> null then List.Min({U, Z}) else Z, B), 4),
-                Work_Start_Hr = if Z = null then null else fx.R(fx.HrsFrom(Z, B), 4),
-                NAV_Done_Hr = if Done = null then null else fx.R(fx.HrsFrom(Done, B), 4)
+                InHand_Hr = if Z = null then null else fx[R](fx[HrsFrom](if U <> null then List.Min({U, Z}) else Z, B), 4),
+                Work_Start_Hr = if Z = null then null else fx[R](fx[HrsFrom](Z, B), 4),
+                NAV_Done_Hr = if Done = null then null else fx[R](fx[HrsFrom](Done, B), 4)
             ]),
     C1Fields = {"Processing_Lag_Days", "Checker_Name", "Reassigned", "Self_Checked", "NAV_Start_DT", "NAV_End_DT",
         "Delivered_DT", "Implied_Work_Start_DT", "Headroom_After_Pricing_Mins", "Pricing_To_Calc_Mins",
@@ -124,7 +124,7 @@ let
     Indexed = Table.AddIndexColumn(Expanded1, "Row_ID", 1, 1, Int64.Type),
     // Step 2: per maker and process date, the queue behind the maker's other fund-days (Queue_Wait_Mins) and
     // the latest earlier NAV start (Maker_Free_From_DT). Same overlap rule as the v4.5 SUMPRODUCT.
-    WithMakerKey = Table.AddColumn(Indexed, "Maker_Key", each fx.Key([Maker_Name]), type text),
+    WithMakerKey = Table.AddColumn(Indexed, "Maker_Key", each fx[Key]([Maker_Name]), type text),
     Queue = (g as table) as table =>
         let
             T = Table.Buffer(g),
@@ -146,7 +146,7 @@ let
                                 let Ov = List.Min({Wi, BT{j}}) - List.Max({Ui, BS{j}}) in if Ov > 0 then Ov else 0)),
                     QueueMins = if AC = null then null
                         else if Row[Maker_Key] = null or AC = 0 then 0
-                        else List.Min({AC, fx.R0(fx.R(1440 * Total, 4))}),
+                        else List.Min({AC, fx[R0](fx[R](1440 * Total, 4))}),
                     Earlier = if Row[Maker_Key] = null or Wi = null then {}
                         else List.Select(List.Transform(Pos, (j) => if j <> i and Ws{j} <> null and Ws{j} < Wi then Ws{j} else null), each _ <> null),
                     FreeFrom = if List.IsEmpty(Earlier) then null else DateTime.From(List.Max(Earlier))
@@ -161,7 +161,7 @@ let
     // Step 3: own recon and other hold-up, which need the queue minutes.
     WithOwn = Table.AddColumn(Combined, "Own_Recon_Mins", each
         if [Wait_After_Pricing_Mins] = null then null
-        else fx.R0(List.Min({[Wait_After_Pricing_Mins] - [Queue_Wait_Mins], fx.N([Recon_Mins])})), type nullable number),
+        else fx[R0](List.Min({[Wait_After_Pricing_Mins] - [Queue_Wait_Mins], fx[N]([Recon_Mins])})), type nullable number),
     WithOther = Table.AddColumn(WithOwn, "Other_Holdup_Mins", each
         if [Wait_After_Pricing_Mins] = null then null
         else [Wait_After_Pricing_Mins] - [Queue_Wait_Mins] - [Own_Recon_Mins], type nullable number),

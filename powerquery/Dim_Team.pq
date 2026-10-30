@@ -5,14 +5,14 @@ let
     Raw = NAV_Inputs[Team],
     Rows = List.Transform(Table.ToRecords(Raw), (r) =>
         let
-            Start = fx.Hr(r[Shift_Start])
+            Start = fx[Hr](r[Shift_Start])
         in
             [
-                Team_ID = fx.Txt(r[Team_ID]),
-                Team_Name = fx.Txt(r[Team_Name]),
-                Shift_Start = fx.ToTime(r[Shift_Start]),
-                Shifts_In_Team = fx.Num(r[Shifts_In_Team]),
-                Daily_Capacity_Mins = fx.Num(r[Daily_Capacity_Mins]),
+                Team_ID = fx[Txt](r[Team_ID]),
+                Team_Name = fx[Txt](r[Team_Name]),
+                Shift_Start = fx[ToTime](r[Shift_Start]),
+                Shifts_In_Team = fx[Num](r[Shifts_In_Team]),
+                Daily_Capacity_Mins = fx[Num](r[Daily_Capacity_Mins]),
                 Shift_Start_Hr = Start,
                 Shift_End_Hr = Start + Cfg[Shift_Length_Hrs]
             ]),

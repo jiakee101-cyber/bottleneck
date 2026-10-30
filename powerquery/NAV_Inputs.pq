@@ -4,15 +4,15 @@
 let
     fx = fxNAV,
     Inputs = [
-        Team = fx.Inputs("Dim_Team", {"Team_ID", "Team_Name", "Shift_Start", "Shifts_In_Team", "Daily_Capacity_Mins"}),
-        Signoff = fx.Inputs("Dim_Signoff", {"Signoff_Model", "Planned_Tail_Mins"}),
-        Fund = fx.Inputs("Dim_Fund", {"Fund_ID", "Fund_Name", "Client_ID", "Client_Name", "Strategic_Client", "Team_ID",
+        Team = fx[Inputs]("Dim_Team", {"Team_ID", "Team_Name", "Shift_Start", "Shifts_In_Team", "Daily_Capacity_Mins"}),
+        Signoff = fx[Inputs]("Dim_Signoff", {"Signoff_Model", "Planned_Tail_Mins"}),
+        Fund = fx[Inputs]("Dim_Fund", {"Fund_ID", "Fund_Name", "Client_ID", "Client_Name", "Strategic_Client", "Team_ID",
             "Default_Analyst_Name", "Weightage", "ETD", "OTC_nonCFD", "OTC_CFD", "PFC", "EUC", "Has_Custody_Process",
             "Has_TA_Process", "Has_Broker_Process", "Custody_Cutoff", "TA_Cutoff", "Broker_ETA", "Pricing_Cutoff", "TOP_ID",
             "Client_Cutoff", "NAV_Deadline", "Signoff_Model", "Cutoff_Data_Quality"}),
-        TOP = fx.Inputs("Dim_TOP", {"TOP_ID", "TOP_Name", "Pricing_Supplier"}),
-        Analyst = fx.Inputs("Dim_Analyst", {"Analyst_Name", "Team_ID", "Active"}),
-        Slot = fx.Inputs("Dim_Slot", {"Slot_Start_Hr"})
+        TOP = fx[Inputs]("Dim_TOP", {"TOP_ID", "TOP_Name", "Pricing_Supplier"}),
+        Analyst = fx[Inputs]("Dim_Analyst", {"Analyst_Name", "Team_ID", "Active"}),
+        Slot = fx[Inputs]("Dim_Slot", {"Slot_Start_Hr"})
     ]
 in
     Inputs

@@ -30,16 +30,16 @@ let
             Tables = List.Transform(Table.ToRecords(Ordered), each ReadFile([Content], Text.Lower([Extension])))
         in
             Table.Combine(Tables),
-    FromSheet = () => Table.SelectColumns(fx.Sheet("Status_Log"), Cols, MissingField.Error),
-    Source = if fx.IsBlank(NAV_StatusLogFolder) then FromSheet() else FromFolder(),
+    FromSheet = () => Table.SelectColumns(fx[Sheet]("Status_Log"), Cols, MissingField.Error),
+    Source = if fx[IsBlank](NAV_StatusLogFolder) then FromSheet() else FromFolder(),
     Typed = Table.TransformColumns(Source, {
-        {"Log_NAV_Date", fx.ToDate, type nullable date},
-        {"Log_Process_Date", fx.ToDate, type nullable date},
-        {"Log_Fund_ID", fx.Txt, type nullable text},
-        {"Log_Status", fx.Txt, type nullable text},
-        {"Log_Timestamp", fx.ToDateTime, type nullable datetime},
-        {"Log_Person_Name", fx.Txt, type nullable text}}),
-    FromDate = if fx.IsBlank(NAV_LoadFromDate) then null else Date.FromText(Text.Trim(NAV_LoadFromDate), [Format = "yyyy-MM-dd"]),
+        {"Log_NAV_Date", fx[ToDate], type nullable date},
+        {"Log_Process_Date", fx[ToDate], type nullable date},
+        {"Log_Fund_ID", fx[Txt], type nullable text},
+        {"Log_Status", fx[Txt], type nullable text},
+        {"Log_Timestamp", fx[ToDateTime], type nullable datetime},
+        {"Log_Person_Name", fx[Txt], type nullable text}}),
+    FromDate = if fx[IsBlank](NAV_LoadFromDate) then null else Date.FromText(Text.Trim(NAV_LoadFromDate), [Format = "yyyy-MM-dd"]),
     NonBlank = Table.SelectRows(Typed, each [Log_Status] <> null and [Log_NAV_Date] <> null
         and [Log_Process_Date] <> null and [Log_Fund_ID] <> null
         and (FromDate = null or [Log_Process_Date] >= FromDate)),
