@@ -1,0 +1,336 @@
+Option Explicit
+
+Sub Strategic_Fund_Optimizer()
+    Dim wsD As Worksheet, wsC As Worksheet, wsO As Worksheet, wsS As Worksheet
+    Set wsD = Sheets("Database")
+    Set wsC = Sheets("Control_Centre")
+    
+    '========================
+    ' Output Sheets
+    '========================
+    On Error Resume Next
+    Set wsO = Sheets("Output")
+    If wsO Is Nothing Then
+        Set wsO = Sheets.Add
+        wsO.Name = "Output"
+    Else
+        wsO.Cells.Clear
+    End If
+    
+    Set wsS = Sheets("Summary")
+    If wsS Is Nothing Then
+        Set wsS = Sheets.Add
+        wsS.Name = "Summary"
+    Else
+        wsS.Cells.Clear
+    End If
+    On Error GoTo 0
+    
+    wsO.Range("A1:R1").Value = Array("Fund Name", "Sub Fund Name", "Subfund Code", _
+        "Model", "Current Team", "Custody", "Pricing", "OTC", "ETD", _
+        "Min Gap", "Critical Level", "FTE Score", "FTE Alloc", _
+        "Capacity Score", "Cluster Score", "Suggested Team", "NAV", "Internal")
+    
+    wsS.Range("A1:H1").Value = Array("Fund Name", "Sub Fund Name", "Subfund Code", _
+        "From Team", "To Team", "Min Gap", "Critical Level", "Reason")
+    
+    '========================
+    ' Dictionaries
+    '========================
+    Dim dictFTE As Object: Set dictFTE = CreateObject("Scripting.Dictionary")
+    Dim dictLoad As Object: Set dictLoad = CreateObject("Scripting.Dictionary")
+    Dim dictLocked As Object: Set dictLocked = CreateObject("Scripting.Dictionary")
+    Dim fundDict As Object: Set fundDict = CreateObject("Scripting.Dictionary")
+    
+    Dim i As Long, lastRow As Long
+    Dim teamKey As String, fundKey As String
+    
+    '========================
+    ' Load Teams and Headcount
+    '========================
+    Dim lastRowC As Long
+    lastRowC = wsC.Cells(wsC.Rows.count, "C").End(xlUp).Row
+    For i = 2 To lastRowC
+        If wsC.Cells(i, "C").Value <> "" Then
+            dictFTE(Normalize(wsC.Cells(i, "C").Value)) = wsC.Cells(i, "D").Value
+        End If
+    Next i
+    
+    '========================
+    ' Load Locked Clients
+    '========================
+    Dim lastLockRow As Long
+    lastLockRow = wsC.Cells(wsC.Rows.count, "Q").End(xlUp).Row
+    For i = 2 To lastLockRow
+        If wsC.Cells(i, "Q").Value <> "" Then
+            dictLocked(Normalize(wsC.Cells(i, "Q").Value)) = True
+        End If
+    Next i
+    
+    '========================
+    ' Initialize Team Load
+    '========================
+    lastRow = wsD.Cells(wsD.Rows.count, "A").End(xlUp).Row
+    For i = 2 To lastRow
+        teamKey = Normalize(wsD.Cells(i, "E").Value)
+        If dictFTE.exists(teamKey) Then
+            If Not dictLoad.exists(teamKey) Then dictLoad(teamKey) = 0
+            dictLoad(teamKey) = dictLoad(teamKey) + 1
+        End If
+    Next i
+    
+    '========================
+    ' Group rows by Fund
+    '========================
+    For i = 2 To lastRow
+        fundKey = Normalize(wsD.Cells(i, "Q").Value)
+        teamKey = Normalize(wsD.Cells(i, "E").Value)
+        
+        If fundKey = "" Or Not dictFTE.exists(teamKey) Then GoTo NextRow
+        
+        If Not fundDict.exists(fundKey) Then fundDict.Add fundKey, New Collection
+        fundDict(fundKey).Add i
+NextRow:
+    Next i
+    
+    '========================
+    ' Process Funds
+    '========================
+    Dim outRow As Long: outRow = 2
+    Dim sumRow As Long: sumRow = 2
+    Dim fund As Variant
+    
+    For Each fund In fundDict.Keys
+        Dim rowsCol As Collection: Set rowsCol = fundDict(fund)
+        Dim firstRow As Long: firstRow = rowsCol(1)
+        
+        Dim currentTeam As String
+        currentTeam = Normalize(wsD.Cells(firstRow, "E").Value)
+        
+        Dim mainCut As Variant
+        mainCut = wsD.Cells(firstRow, "CN").Value
+        If Not IsNumeric(mainCut) Then mainCut = 0
+        
+        '========================
+        ' Calculate Min Gap
+        '========================
+        Dim minGap As Double: minGap = 999
+        Dim r As Variant
+        For Each r In rowsCol
+            Dim cuts(1 To 4) As Variant
+            cuts(1) = wsD.Cells(r, "CJ").Value
+            cuts(2) = wsD.Cells(r, "CK").Value
+            cuts(3) = wsD.Cells(r, "CL").Value
+            cuts(4) = wsD.Cells(r, "CM").Value
+            
+            Dim j As Integer
+            For j = 1 To 4
+                If IsNumeric(cuts(j)) Then
+                    Dim gap As Double
+                    gap = (mainCut - cuts(j)) * 24
+                    If gap < 0 Then gap = gap + 24
+                    If gap < minGap Then minGap = gap
+                End If
+            Next j
+        Next r
+        If minGap = 999 Then minGap = 0
+        
+        '========================
+        ' Critical Level
+        '========================
+        Dim reqGap As Double
+        reqGap = Application.WorksheetFunction.Min(wsC.Range("F4:F7"))
+        
+        Dim ratio As Double
+        If reqGap > 0 Then ratio = minGap / reqGap Else ratio = 0
+        
+        Dim crit As Long
+        If ratio >= 1 Then
+            crit = 5
+        ElseIf ratio >= 0.75 Then
+            crit = 4
+        ElseIf ratio >= 0.5 Then
+            crit = 3
+        ElseIf ratio >= 0.25 Then
+            crit = 2
+        Else
+            crit = 1
+        End If
+        
+        '========================
+        ' Team Metrics
+        '========================
+        Dim teamCapacity As Double
+        teamCapacity = dictFTE(currentTeam) * wsC.Range("F3").Value
+        
+        Dim teamLoad As Double
+        If dictLoad.exists(currentTeam) Then teamLoad = dictLoad(currentTeam)
+        
+        Dim capacityScore As Double
+        If teamCapacity > 0 Then capacityScore = teamLoad / teamCapacity
+        
+        Dim clusterLoad As Long
+        clusterLoad = CountCluster(wsD, currentTeam, mainCut)
+        
+        Dim clusterCap As Double
+        clusterCap = dictFTE(currentTeam) * wsC.Range("F2").Value
+        
+        Dim clusterScore As Double
+        If clusterCap > 0 Then clusterScore = clusterLoad / clusterCap
+        
+        '========================
+        ' Suggest Team
+        '========================
+        Dim suggestedTeam As String: suggestedTeam = currentTeam
+        Dim reason As String: reason = ""
+        
+        If dictLocked.exists(fund) Then
+            reason = "Locked Client"
+        ElseIf teamLoad > teamCapacity Or crit <= 2 Then
+            suggestedTeam = GetBestTeam_v2(dictFTE, dictLoad, currentTeam, wsD, wsC, mainCut, rowsCol.count)
+            If teamLoad > teamCapacity Then
+                reason = "Insufficient FTE"
+            Else
+                reason = "Insufficient cutoff gap"
+            End If
+        End If
+        
+        '========================
+        ' Update Load
+        '========================
+        If suggestedTeam <> currentTeam Then
+            dictLoad(currentTeam) = dictLoad(currentTeam) - rowsCol.count
+            If Not dictLoad.exists(suggestedTeam) Then dictLoad(suggestedTeam) = 0
+            dictLoad(suggestedTeam) = dictLoad(suggestedTeam) + rowsCol.count
+        End If
+        
+        '========================
+        ' Output
+        '========================
+        For Each r In rowsCol
+            wsO.Cells(outRow, 1).Value = wsD.Cells(r, "Q").Value
+            wsO.Cells(outRow, 2).Value = wsD.Cells(r, "W").Value
+            wsO.Cells(outRow, 3).Value = wsD.Cells(r, "S").Value
+            wsO.Cells(outRow, 4).Value = wsD.Cells(r, "C").Value
+            wsO.Cells(outRow, 5).Value = wsD.Cells(r, "E").Value
+            wsO.Cells(outRow, 6).Value = wsD.Cells(r, "CJ").Value
+            wsO.Cells(outRow, 7).Value = wsD.Cells(r, "CK").Value
+            wsO.Cells(outRow, 8).Value = wsD.Cells(r, "CL").Value
+            wsO.Cells(outRow, 9).Value = wsD.Cells(r, "CM").Value
+            wsO.Cells(outRow, 10).Value = minGap
+            wsO.Cells(outRow, 11).Value = crit
+            wsO.Cells(outRow, 12).Value = wsD.Cells(r, "CF").Value
+            wsO.Cells(outRow, 13).Value = wsD.Cells(r, "CG").Value
+            wsO.Cells(outRow, 14).Value = capacityScore
+            wsO.Cells(outRow, 15).Value = clusterScore
+            wsO.Cells(outRow, 16).Value = suggestedTeam
+            wsO.Cells(outRow, 17).Value = wsD.Cells(r, "CN").Value
+            wsO.Cells(outRow, 18).Value = wsD.Cells(r, "CO").Value
+            
+            If suggestedTeam <> wsD.Cells(r, "E").Value Then
+                wsO.Cells(outRow, 16).Interior.Color = RGB(255, 199, 206)
+                wsS.Cells(sumRow, 1).Value = wsD.Cells(r, "Q").Value
+                wsS.Cells(sumRow, 2).Value = wsD.Cells(r, "W").Value
+                wsS.Cells(sumRow, 3).Value = wsD.Cells(r, "S").Value
+                wsS.Cells(sumRow, 4).Value = wsD.Cells(r, "E").Value
+                wsS.Cells(sumRow, 5).Value = suggestedTeam
+                wsS.Cells(sumRow, 6).Value = minGap
+                wsS.Cells(sumRow, 7).Value = crit
+                wsS.Cells(sumRow, 8).Value = reason
+                sumRow = sumRow + 1
+            End If
+            
+            ApplyCriticalColour wsO.Cells(outRow, 11), crit
+            outRow = outRow + 1
+        Next r
+    Next fund
+    
+    MsgBox "Optimization Completed", vbInformation
+End Sub
+
+'========================
+Function GetBestTeam_v2(dictFTE As Object, dictLoad As Object, currentTeam As String, wsD As Worksheet, wsC As Worksheet, ByVal mainCut As Variant, ByVal fundSize As Long) As String
+    Dim k As Variant
+    Dim bestTeam As String
+    Dim bestScore As Double
+    
+    bestScore = 999999
+    bestTeam = currentTeam
+    
+    For Each k In dictFTE.Keys
+    Dim teamName As String
+    teamName = CStr(k) ' Force string
+    If teamName <> currentTeam Then
+        If dictFTE(teamName) > 0 Then
+            Dim capacity As Double
+            capacity = dictFTE(teamName) * wsC.Range("F3").Value
+
+            Dim load As Double: load = 0
+            If dictLoad.exists(teamName) Then load = dictLoad(teamName)
+
+            If load + fundSize > capacity Then GoTo NextTeam
+
+            Dim clusterLoad As Long
+            clusterLoad = CountCluster(wsD, teamName, mainCut)
+
+            Dim clusterCap As Double
+            clusterCap = dictFTE(teamName) * wsC.Range("F2").Value
+
+            If clusterCap > 0 Then
+                If clusterLoad + fundSize > clusterCap Then GoTo NextTeam
+            End If
+
+            Dim score As Double: score = 0
+            If capacity > 0 Then score = score + (load / capacity)
+            If clusterCap > 0 Then score = score + (clusterLoad / clusterCap)
+
+            If score < bestScore Then
+                bestScore = score
+                bestTeam = teamName
+            End If
+        End If
+    End If
+NextTeam:
+Next k
+    
+    GetBestTeam_v2 = bestTeam
+End Function
+
+'========================
+Function CountCluster(wsD As Worksheet, teamName As String, mainCut As Variant) As Long
+    Dim i As Long, lastRow As Long
+    lastRow = wsD.Cells(wsD.Rows.count, "A").End(xlUp).Row
+    For i = 2 To lastRow
+        If Normalize(wsD.Cells(i, "E").Value) = teamName Then
+            If IsNumeric(wsD.Cells(i, "CN").Value) And IsNumeric(mainCut) Then
+                If Abs((wsD.Cells(i, "CN").Value - mainCut) * 24) <= 1 Then
+                    CountCluster = CountCluster + 1
+                End If
+            End If
+        End If
+    Next i
+End Function
+
+'========================
+Function Normalize(val As Variant) As String
+    If IsError(val) Then
+        Normalize = ""
+    ElseIf IsNull(val) Or val = "" Then
+        Normalize = ""
+    Else
+        Normalize = Trim(UCase(CStr(val)))
+    End If
+End Function
+
+'========================
+Sub ApplyCriticalColour(targetCell As Range, critLevel As Long)
+    Select Case critLevel
+        Case 5: targetCell.Interior.Color = RGB(198, 239, 206)
+        Case 4: targetCell.Interior.Color = RGB(226, 239, 218)
+        Case 3: targetCell.Interior.Color = RGB(255, 235, 156)
+        Case 2: targetCell.Interior.Color = RGB(255, 199, 206)
+        Case 1: targetCell.Interior.Color = RGB(255, 0, 0)
+    End Select
+End Sub
+
+
