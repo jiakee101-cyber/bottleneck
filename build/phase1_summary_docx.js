@@ -44,49 +44,33 @@ const children = [
   bullet([b('Waiting time is broken down. '), 'Time between pricing arrival and NAV start is split into queueing behind other funds, the maker reconciling the fund, and other hold-ups such as data or breaks.']),
   bullet([b('Team capacity is measured by the hour. '), 'For any day we can compare the work on the desk with the makers on shift, and see the hours where the team was over capacity.']),
   bullet([b('It runs at full volume. '), 'The calculations were moved out of Excel into Power BI so the report handles around 5,000 funds a day.']),
-  p('Phase 1 also showed what we cannot yet measure. Phase 2 proposes a bottleneck framework: agreed standards for the processing window from pricing arrival to client cut-off, a review of supplier cut-offs that are missing or off track, and a consistent way to classify each bottleneck.'),
+  p([b('Where it adds most value. '), 'Phase 1 is most useful for smaller teams, where the priority is to find delays caused by suppliers and inefficiency within fund accounting (FA). For larger regions with several teams, this is a second priority: they first need to know that workload is balanced across their teams. Phase 2 addresses both.']),
+  p('Phase 1 also showed what we cannot yet measure. Phase 2 proposes a bottleneck framework: agreed standards for the processing window from pricing arrival to client cut-off, a review of supplier cut-offs that are missing or off track, a consistent way to classify each bottleneck, and a view of workload balance across teams in a region.'),
 
   h1('2. Phase 1: what was delivered'),
-  h2('2.1 One dataset for the whole NAV day'),
-  p('The dashboard brings together four sources that were previously looked at separately:'),
-  table([2600, 6426], [
-    ['Source', 'What it provides'],
-    ['NAV status log', 'Time each fund was calculated, controlled, signed off by fund accounting and signed off, and who did each step'],
-    ['Pricing (TOP) arrivals', 'When each pricing file arrived, per pricing group and day'],
-    ['Fund reference', 'Each fund\'s client, team, pricing group, product mix and cut-offs for custody, TA, broker, pricing and the client'],
-    ['Team and analyst roster', 'Teams, shift start times, makers and their daily capacity'],
-  ]),
-  gap(),
-  p('From these, every fund-day gets a full timeline, the minutes spent in each stage, its headroom to the client cut-off, and a breach flag.'),
+  h2('2.1 One version of the NAV day'),
+  bullet([b('One timeline per fund, every day. '), 'Status times, pricing arrivals, fund cut-offs and the team roster are combined, so each fund-day shows when pricing arrived, how long it waited, how long our processing took and whether the client cut-off was met.']),
+  bullet([b('Discussions start from the same facts. '), 'Supplier, team and client conversations no longer depend on separate spreadsheets or recollection of a bad day; everyone looks at the same numbers.']),
+  bullet([b('Early warning, not just hindsight. '), 'Headroom to the client cut-off is measured for every fund-day, so funds that are consistently close to the line are visible before they breach.']),
 
-  h2('2.2 Questions the dashboard answers'),
-  table([2400, 3500, 3126], [
-    ['View', 'Question', 'What it shows'],
-    ['Supplier risk', 'Which pricing files put the most funds at risk, and is lateness coming from suppliers or from us?', 'Funds and clients behind each pricing file; buffer between each supplier\'s cut-off and pricing; late hours per file against the breaches that followed; breaches by likely cause per client'],
-    ['Waiting after pricing', 'Once pricing arrived, why did funds still wait to start?', 'Wait split into queue behind the maker\'s other funds, the maker\'s own reconciliation, and other hold-ups'],
-    ['Fund-by-fund timeline', 'Where did each fund\'s time go on a given day?', 'Waiting, NAV calculation, control and delivery per fund, with every cut-off on one clock and the headroom left'],
-    ['Team workload', 'Did we have enough makers when the work arrived?', 'Work in hand against maker capacity hour by hour, flagged green, amber or red, with the client cut-offs due in each hour'],
-  ]),
-  gap(),
+  h2('2.2 Clear answers to the questions that matter'),
+  bullet([b('Which suppliers put us most at risk? '), 'The report shows how many funds and clients depend on each pricing file, how often it is late, and how many client breaches followed. Escalation can focus on the few suppliers that actually cause breaches.']),
+  bullet([b('Is the delay ours or the supplier\'s? '), 'Waiting after pricing arrives is split into queueing behind other funds, the maker reconciling the fund, and other hold-ups. This separates a staffing problem from a data or process problem, which need different fixes.']),
+  bullet([b('Where exactly did a late fund lose its time? '), 'A fund-by-fund timeline puts every stage and every cut-off on one clock, so a breach can be traced to its stage in seconds.']),
+  bullet([b('Did we have the people when the work arrived? '), 'Work on the desk is compared with makers on shift, hour by hour. Over-capacity hours stand out, giving evidence for shift and staffing decisions.']),
 
-  h2('2.3 How it points to a bottleneck'),
-  p('For any late or tight fund-day, the dashboard shows which of four areas the time was lost in:'),
-  table([2400, 6626], [
-    ['Area', 'Signal in the dashboard'],
-    ['Supplier', 'Pricing arrived after the fund\'s own pricing cut-off; the pricing group missed its binding cut-off'],
-    ['Capacity', 'High share of waiting spent behind the maker\'s other funds; team load above 100% in the hours before the cut-off'],
-    ['Data and process', 'Long waiting not explained by queue or reconciliation; long NAV calculation or sign-off stages; recalculations'],
-    ['Schedule design', 'Supplier cut-offs at or after the pricing cut-off (no buffer), or a client cut-off that leaves less time than the work needs'],
-  ]),
-  gap(),
-  p('Each breached fund-day is given one likely cause: pricing late, thin custody buffer, broker-dependent, or none of these. Only late pricing is measured directly; the others are exposures, for the reasons in section 3.'),
+  h2('2.3 Pinpointing the type of bottleneck'),
+  bullet([b('Supplier: '), 'pricing arrived after the fund\'s cut-off, or the pricing group missed its deadline.']),
+  bullet([b('Capacity: '), 'funds queued behind the maker\'s other work, or the team was over capacity before the cut-off.']),
+  bullet([b('Data and process: '), 'waiting not explained by queueing or reconciliation, long calculation or sign-off stages, or recalculations.']),
+  bullet([b('Schedule design: '), 'a supplier due at or after the pricing cut-off (no buffer), or a client cut-off that leaves less time than the work needs.']),
+  p('Each breached fund-day is given one likely cause, so action goes to the right owner. Only late pricing can be measured directly today; the other causes are exposures (see section 3).'),
 
   h2('2.4 Built to scale and to be trusted'),
-  bullet('All calculations now run in Power BI rather than Excel formulas, so the report handles full daily volume and keeps months of history.'),
-  bullet('The status log is read from a folder of system exports, so no manual copying into spreadsheets is needed.'),
-  bullet('Built-in data-quality checks flag missing cut-offs, unknown funds, missing timestamps and four-eyes breaches.'),
-  bullet('The new calculations were checked against the original spreadsheet logic on a test dataset, and the results matched.'),
-  bullet('A chart guide and a one-page summary explain each view for users.'),
+  bullet([b('Full volume. '), 'All calculations run in Power BI rather than Excel, handling around 5,000 funds a day with months of history.']),
+  bullet([b('Less manual effort. '), 'The status log is read directly from system exports; no copying into spreadsheets.']),
+  bullet([b('Reliable numbers. '), 'Built-in checks flag missing cut-offs, unknown funds, missing timestamps and four-eyes breaches, and the calculations were tested against the original spreadsheet logic with matching results.']),
+  bullet([b('Easy to adopt. '), 'A chart guide and a one-page summary explain each view for users.']),
 
   h1('3. What Phase 1 cannot yet tell us'),
   table([3000, 6026], [
@@ -101,6 +85,7 @@ const children = [
 
   h1('4. Phase 2 proposal: a bottleneck framework'),
   p([b('Objective: '), 'agree the standards each fund-day is judged against, so that bottlenecks are identified the same way across teams and regions, and action can be targeted.']),
+  p([b('Two starting points. '), 'Smaller teams can move straight to the processing window standard and the supplier cut-off review (4.1 to 4.3). Larger regions with several teams start with workload balance across their teams (4.4), then apply the same standards.']),
 
   h2('4.1 Processing window standard'),
   p('Define the reasonable processing window from pricing (TOP) arrival to client cut-off.'),
@@ -119,8 +104,8 @@ const children = [
   bullet('Set clear thresholds that place each late or tight fund-day in one category: supplier, capacity, data and process, or schedule design.'),
   bullet('Report the categories by team, client and supplier, so that each issue has a clear owner.'),
 
-  h2('4.4 Team buffer and rebalancing'),
-  bullet('Add a view comparing teams within the same region: does each team keep enough buffer to its cut-offs?'),
+  h2('4.4 Workload balance across teams (first priority for multi-team regions)'),
+  bullet('Add a view comparing teams within the same region: is workload balanced, and does each team keep enough buffer to its cut-offs?'),
   bullet('Propose which funds could move to another team in the region without reducing that team\'s buffer, taking shift times and spare capacity into account.'),
 
   h2('4.5 Data capture and integration'),
@@ -129,7 +114,7 @@ const children = [
 
   h2('4.6 Proposed sequence'),
   num([b('Baseline: '), 'measure current processing windows and supplier buffers from Phase 1 data.']),
-  num([b('Agree standards: '), 'required windows and thresholds with team leads in one pilot region.']),
+  num([b('Agree standards: '), 'required windows and thresholds with team leads in one pilot region; for multi-team regions, start with the workload balance view.']),
   num([b('Build: '), 'framework views and the cut-off review list in the dashboard; pilot with the region.']),
   num([b('Extend: '), 'roll out to other regions and switch the data source to Arcturus as it becomes available.']),
 
